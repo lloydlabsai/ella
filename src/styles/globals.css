@@ -1,0 +1,8 @@
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0c0c10; color: #e0e0e0; font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2a2f; border-radius: 3px; }
+::selection { background: rgba(232, 168, 56, 0.25); }
+a { color: #5B8DEF; text-decoration: none; }
+a:hover { text-decoration: underline; }
