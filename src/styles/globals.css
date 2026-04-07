@@ -1,8 +1,9 @@
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #0c0c10; color: #e0e0e0; font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+body { background: #F7F3EE; color: #2D2520; font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #2a2a2f; border-radius: 3px; }
-::selection { background: rgba(232, 168, 56, 0.25); }
-a { color: #5B8DEF; text-decoration: none; }
+::-webkit-scrollbar-thumb { background: #D4CFC7; border-radius: 3px; }
+::selection { background: rgba(232, 102, 74, 0.2); }
+a { color: #7B9EC4; text-decoration: none; }
 a:hover { text-decoration: underline; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }

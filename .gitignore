@@ -5,3 +5,12 @@ dist/
 *.log
 .DS_Store
 .vite/
+playwright-linkedin-profile/
+pw-profile-*/
+*.png
+!public/*.png
+!chrome-extension/icons/*.png
+supabase/.temp/
+scripts/probe-linkedin-selectors.mjs
+scripts/devtools-probe.js
+chrome-extension/probe.js

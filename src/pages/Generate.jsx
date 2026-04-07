@@ -1,213 +1,1044 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { callClaude } from "../lib/api";
-import { validateDraft } from "../lib/tavily";
-import { enrichWithContext } from "../lib/perplexity";
+import { extractFeatures } from "../utils/features";
 import { formatInsightsForPrompt } from "../utils/pipeline";
-import { getResearcherPrompt, getDrafterPrompt, getValidatorPrompt } from "../utils/prompts";
-import AgentCard from "../components/AgentCard";
-import ValidationBadge from "../components/ValidationBadge";
-import PricingGate from "../components/PricingGate";
+import { getSeedPatterns } from "../utils/seed-patterns";
+import { getDrafterPrompt } from "../utils/prompts";
 
-const TONES = [
-  { id: "thought-leader", label: "Thought Leader" },
-  { id: "storyteller", label: "Storyteller" },
-  { id: "contrarian", label: "Contrarian" },
-  { id: "data-driven", label: "Data-Driven" },
-];
+// ─── Rate Limiting (monthly) ─────────────────────────────
 
-export default function Generate({ profile, mlResults }) {
-  const [tone, setTone] = useState("thought-leader");
-  const [extra, setExtra] = useState("");
-  const [agents, setAgents] = useState({
-    researcher: { status: "idle", result: null },
-    drafter: { status: "idle", result: null },
-    validator: { status: "idle", result: null },
-  });
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState(null);
-  const [draft, setDraft] = useState("");
-  const [validation, setValidation] = useState(null);
+const RATE_KEY = "ella_gen_timestamps";
+function getGenerationsThisMonth() {
+  try {
+    const raw = localStorage.getItem(RATE_KEY);
+    if (!raw) return [];
+    const ts = JSON.parse(raw);
+    const start = new Date(); start.setDate(1); start.setHours(0,0,0,0);
+    return ts.filter((t) => t >= start.getTime());
+  } catch { return []; }
+}
+function recordGeneration() {
+  const thisMonth = getGenerationsThisMonth();
+  thisMonth.push(Date.now());
+  localStorage.setItem(RATE_KEY, JSON.stringify(thisMonth));
+}
+
+// ─── Collapsible Section ──────────────────────────────────
+
+function Section({ id, title, subtitle, expanded, onToggle, badge, children }) {
+  return (
+    <div style={{
+      background: "#fff", border: "1px solid #EDE8E1", borderRadius: 14,
+      marginBottom: 12, boxShadow: "0 1px 3px rgba(45,37,32,0.04)",
+      overflow: "hidden", transition: "box-shadow 0.2s",
+      ...(expanded ? { boxShadow: "0 2px 10px rgba(45,37,32,0.07)" } : {}),
+    }}>
+      <div onClick={onToggle} style={{
+        padding: "16px 20px", cursor: "pointer", display: "flex",
+        justifyContent: "space-between", alignItems: "center",
+      }}>
+        <div>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: "#2D2520", margin: 0 }}>{title}</h3>
+          {subtitle && <p style={{ fontSize: 11, color: "#B5A698", margin: "2px 0 0" }}>{subtitle}</p>}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {badge}
+          <span style={{ fontSize: 14, color: "#B5A698", transition: "transform 0.2s", transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}>&#9662;</span>
+        </div>
+      </div>
+      {expanded && <div style={{ padding: "0 20px 20px", borderTop: "1px solid #F0EBE4" }}>{children}</div>}
+    </div>
+  );
+}
+
+// ─── Small reusable components ────────────────────────────
+
+function Pill({ active, onClick, children }) {
+  return (
+    <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (onClick) onClick(); }} style={{
+      display: "inline-flex", alignItems: "center", gap: 4,
+      padding: "6px 12px", borderRadius: 16, border: `1.5px solid ${active ? "#E8664A" : "#D4CFC7"}`,
+      background: active ? "rgba(232,102,74,0.08)" : "#F0EBE4", color: active ? "#E8664A" : "#B5A698",
+      fontSize: 12, fontWeight: 600, cursor: "pointer", margin: "3px",
+      textDecoration: active ? "none" : "line-through",
+      opacity: active ? 1 : 0.6,
+      transition: "all 0.15s",
+      textAlign: "left",
+    }}>{children}</button>
+  );
+}
+
+function AngleCard({ text, selected, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      textAlign: "left", padding: "12px 14px", borderRadius: 10,
+      border: `1.5px solid ${selected ? "#E8664A" : "#EDE8E1"}`,
+      background: selected ? "rgba(232,102,74,0.04)" : "#fff",
+      cursor: "pointer", fontSize: 12, color: "#2D2520", lineHeight: 1.5, width: "100%",
+    }}>{text}</button>
+  );
+}
+
+// ─── Score helper ─────────────────────────────────────────
+
+function quickScore(text) {
+  if (!text || text.length < 50) return null;
+  const f = extractFeatures(text);
+  let score = 50;
+  if (f.hook_char_count <= 210 && f.hook_char_count >= 40) score += 10;
+  if (f.hook_is_bold_claim || f.hook_is_question || f.hook_is_story || f.hook_is_number) score += 5;
+  if (text.length >= 1200 && text.length <= 1900) score += 10;
+  if (f.cta_is_open_ended) score += 10;
+  else if (f.cta_is_question) score += 5;
+  else score -= 10;
+  if (f.hashtags >= 3 && f.hashtags <= 5) score += 5;
+  if (f.has_external_link) score -= 10;
+  if (/like if you agree|comment yes/i.test(text)) score -= 15;
+  if (f.cta_invites_disagreement) score += 5;
+  if (f.reading_time_seconds >= 30 && f.reading_time_seconds <= 90) score += 5;
+  return { score: Math.max(0, Math.min(100, score)), features: f };
+}
+
+// ─── Strip meta-commentary ───────────────────────────────
+
+function cleanDraft(text) {
+  return text
+    .replace(/\n\s*(?:\*\*)?(?:Applied|Patterns|ML |Note(?:s)? on|Algorithm)[\s\S]*$/i, "")
+    .replace(/\n\s*(?:I applied|This draft |This post )[\s\S]*$/i, "")
+    .replace(/\n\s*---+\s*\n\s*(?:Notes|Patterns)[\s\S]*$/i, "")
+    .trim();
+}
+
+// ─── Visual Direction Analysis ────────────────────────────
+
+const VISUAL_DIRECTIONS = {
+  data: { id: "data", icon: "📊", label: "Data Visualization", desc: "Your post has specific metrics. A simple chart or bold stat graphic would stop scrollers." },
+  stat: { id: "stat", icon: "📱", label: "Bold Stat Graphic", desc: "Pull out your strongest number as large text on a dark background. Readable as a thumbnail." },
+  carousel: { id: "carousel", icon: "📑", label: "Carousel", desc: "Break your key points into individual slides. Carousels get 2.3x more saves on LinkedIn." },
+  hottake: { id: "hottake", icon: "🔥", label: "Bold Text on Color", desc: "Let the words do the work. Strong opinion text on a solid color background. Minimal design." },
+  photo: { id: "photo", icon: "📷", label: "Authentic Photo", desc: "A real photo — behind-the-scenes, in the field. Authenticity > polish on LinkedIn." },
+  textonly: { id: "textonly", icon: "📝", label: "Text Only", desc: "Sometimes the words are enough. Text-only performs well when the hook is strong." },
+};
+
+function analyzeVisualDirection(text) {
+  if (!text || text.length < 100) return [];
+  const results = [];
+  const numberCount = (text.match(/\d+[\d,.]*%?/g) || []).length;
+  const hasComparison = /vs\.?|→|from\s+\$?\d|to\s+\$?\d|increased|decreased|grew|dropped|jumped/i.test(text);
+  const hasFramework = /step\s*\d|first.*second.*third|phase\s*\d|framework|process|playbook|checklist/i.test(text);
+  const hasStrongOpinion = /wrong|mistake|myth|stop\s|unpopular|hot take|controversial|disagree/i.test(text);
+  const hasStory = /last\s+(year|month|week)|i\s+remember|when\s+i\s+(was|worked)|true\s+story|happened\s+to/i.test(text);
+  const listItems = (text.match(/^[\s]*[-•*\d]+[.)]\s/gm) || []).length;
+  const hasNews = /announced|launched|acquired|raised|reported|according to|breaking/i.test(text);
+
+  if (numberCount >= 3 && hasComparison) results.push("data");
+  if (numberCount >= 1) results.push("stat");
+  if (hasFramework || listItems >= 3) results.push("carousel");
+  if (hasStrongOpinion) results.push("hottake");
+  if (hasStory) results.push("photo");
+  if (hasNews && numberCount < 3) results.push("hottake");
+  results.push("textonly");
+
+  // Deduplicate and limit to 4
+  return [...new Set(results)].slice(0, 4);
+}
+
+function generateVisualBrief(directionId, text) {
+  const numbers = text.match(/\$?[\d,.]+[%KMBkmb]?(?:\s*(?:→|to|vs)\s*\$?[\d,.]+[%KMBkmb]?)?/g) || [];
+  const strongestNumber = numbers.sort((a, b) => b.length - a.length)[0] || "";
+  const firstLine = text.split("\n")[0] || "";
+  const lines = text.split("\n").filter((l) => l.trim());
+  const keyPoints = lines.filter((l) => /^[-•*\d]|^\d+[.)]/.test(l.trim())).slice(0, 5);
+  if (keyPoints.length === 0) {
+    // Fall back to paragraphs as key points
+    text.split("\n\n").filter((p) => p.trim()).slice(1, 5).forEach((p) => keyPoints.push(p.split(".")[0]));
+  }
+
+  switch (directionId) {
+    case "data": return `DATA VISUALIZATION BRIEF:\n• Create a simple bar chart or arrow graphic showing: ${numbers.slice(0, 3).join(", ")}\n• Headline: "${firstLine.slice(0, 60)}"\n• Single accent color against dark/neutral background\n• Keep to ONE data point per graphic — don't cram\n• Dimensions: 1200×627px (single image)`;
+    case "stat": return `BOLD STAT GRAPHIC BRIEF:\n• Feature text: "${strongestNumber || numbers[0] || "[your strongest number]"}"\n• Subline: "${firstLine.slice(0, 50)}"\n• Dark background, large sans-serif font, minimal design\n• Must be readable as a thumbnail on mobile\n• Dimensions: 1200×627px`;
+    case "carousel": return `CAROUSEL BRIEF (${Math.min(keyPoints.length + 2, 6)} slides):\n• Slide 1 (cover): "${firstLine.slice(0, 50)}"\n${keyPoints.slice(0, 4).map((p, i) => `• Slide ${i + 2}: "${p.trim().slice(0, 60)}"`).join("\n")}\n• Final slide: CTA — "What's your take?" or "Follow for more"\n• Each slide: ONE idea, readable in 3 seconds\n• Consistent branding across slides\n• Dimensions: 1080×1080px per slide`;
+    case "hottake": return `BOLD TEXT GRAPHIC BRIEF:\n• Text: "${firstLine.slice(0, 80)}"\n• Solid color background (dark navy, deep red, or black)\n• Large, bold sans-serif font\n• No images, no icons — let the words hit\n• Max 7 words on the graphic\n• Dimensions: 1200×627px`;
+    case "photo": return `AUTHENTIC PHOTO BRIEF:\n• Use a real photo — behind-the-scenes, at an event, at your desk\n• Phone photo often outperforms designed graphics on LinkedIn\n• Authenticity > polish\n• Faces increase stop rate — include yourself if appropriate\n• Dimensions: 1200×627px minimum`;
+    case "textonly": return `TEXT ONLY — no graphic needed.\n• Your hook is strong enough to stop the scroll on its own\n• Use line breaks and whitespace generously\n• The post text IS the visual`;
+    default: return "";
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════
+
+export default function Generate({ profile, mlResults, postCount = 0, recentPosts = [], refreshProfile }) {
+  useEffect(() => { if (refreshProfile) refreshProfile(); }, [refreshProfile]);
+
+  const industry = profile?.industry || "";
+  const tier = profile?.tier || "free";
+  const monthlyLimit = tier === "paid" ? 50 : 3;
+  const remaining = Math.max(0, monthlyLimit - getGenerationsThisMonth().length);
+
+  // ─── State ──────────────────────────────────────────────
+  const [expanded, setExpanded] = useState({ spark: true, landscape: false, take: false, draft: false, visual: false, check: false });
+  const toggle = (key) => setExpanded((e) => ({ ...e, [key]: !e[key] }));
+  const open = (key) => setExpanded((e) => ({ ...e, [key]: true }));
+
+  // Spark
+  const [sparkTab, setSparkTab] = useState("ideas");
+  const [topic, setTopic] = useState("");
+  const [ideas, setIdeas] = useState([]);
+  const [loadingIdeas, setLoadingIdeas] = useState(false);
+  const [customSpark, setCustomSpark] = useState("");
+
+  // Landscape
+  const [facts, setFacts] = useState([]); // { text, enabled }
+  const [angles, setAngles] = useState([]); // { text, selected }
+  const [stakeholders, setStakeholders] = useState([]); // { name, selected }
+  const [loadingLandscape, setLoadingLandscape] = useState(false);
+  const [whatAbout, setWhatAbout] = useState("");
+  const [customAngle, setCustomAngle] = useState("");
+
+  // Take
+  const [take, setTake] = useState("");
+
+  // Draft
+  const [blocks, setBlocks] = useState([]); // { id, text }
+  const [loadingDraft, setLoadingDraft] = useState(false);
+  const [editingBlock, setEditingBlock] = useState(null);
+  const [editText, setEditText] = useState("");
+  const [sharpeningBlock, setSharpeningBlock] = useState(null);
+  const [whatMissing, setWhatMissing] = useState("");
+
+  // Conversational refinement
+  const [refineInput, setRefineInput] = useState("");
+  const [refining, setRefining] = useState(false);
+  const [refineHistory, setRefineHistory] = useState([]); // { role, text }
+
+  // Auto-validation
+  const [validation, setValidation] = useState(null); // { claims: [...], enrichments: [...] }
+  const [validating, setValidating] = useState(false);
+
+  // Second perspective
+  const [gems, setGems] = useState([]); // { text, used }
+  const [loadingGems, setLoadingGems] = useState(false);
+
+  // Visual
+  const [visualDirection, setVisualDirection] = useState(null); // selected direction id
+  const [visualBriefCopied, setVisualBriefCopied] = useState(false);
+
+  // Check
+  const [scoreResult, setScoreResult] = useState(null);
+  const [hashtags, setHashtags] = useState([]);
   const [copied, setCopied] = useState(false);
+
   const draftRef = useRef();
 
-  const update = (id, patch) => setAgents((p) => ({ ...p, [id]: { ...p[id], ...patch } }));
-  const industry = profile?.industry || "general business";
-  const toneLabel = TONES.find((t) => t.id === tone)?.label || "Thought Leader";
+  // ─── Derived ────────────────────────────────────────────
+  const fullDraftText = blocks.map((b) => b.text).join("\n\n");
+  const hasContent = topic && (facts.some((f) => f.enabled) || angles.some((a) => a.selected) || take.trim());
+  const canGenerate = topic && remaining > 0;
 
-  const generate = async () => {
-    if (!mlResults) return;
-    setRunning(true);
-    setError(null);
-    setDraft("");
-    setValidation(null);
-    setCopied(false);
-    setAgents({
-      researcher: { status: "idle", result: null },
-      drafter: { status: "idle", result: null },
-      validator: { status: "idle", result: null },
-    });
-
-    const insights = formatInsightsForPrompt(mlResults);
-
+  // ─── Spark: Fetch ideas ─────────────────────────────────
+  const fetchIdeas = async () => {
+    setLoadingIdeas(true);
     try {
-      // Agent 1: Research
-      update("researcher", { status: "running" });
-      const research = await callClaude(
-        getResearcherPrompt(industry, extra),
-        `Based on ML analysis of ${mlResults.totalPosts} successful ${industry} LinkedIn posts, these patterns drive engagement:\n\n${insights}\n\nFind trending topics. Tone: "${toneLabel}".`,
+      // Build deep persona context from all available data
+      const pr = profile?.persona_research;
+      const lc = profile?.linkedin_context;
+      const vp = profile?.voice_profile;
+      const personaParts = [];
+      if (lc?.name) personaParts.push(`Name: ${lc.name}`);
+      if (lc?.headline) personaParts.push(`Role: ${lc.headline}`);
+      if (pr?.niche) personaParts.push(`Niche: ${pr.niche}`);
+      if (pr?.company_context) personaParts.push(`Company: ${pr.company_context}`);
+      if (pr?.competitive_landscape) personaParts.push(`Competitive landscape: ${pr.competitive_landscape}`);
+      if (pr?.topics_they_own) personaParts.push(`Topics they own: ${pr.topics_they_own}`);
+      if (pr?.pain_points) personaParts.push(`Pain points: ${pr.pain_points}`);
+      if (pr?.hot_buttons) personaParts.push(`Hot buttons: ${pr.hot_buttons}`);
+      if (vp?.edge) personaParts.push(`Unique angle: ${vp.edge.slice(0, 200)}`);
+      if (pr?.discovery_topics) personaParts.push(`Discovery topics (adjacent areas where they have a unique angle): ${pr.discovery_topics}`);
+      if (pr?.anti_topics) personaParts.push(`AVOID these topics (outside their credibility): ${pr.anti_topics}`);
+      if (pr?.content_archetype) personaParts.push(`Content style: ${pr.content_archetype}`);
+      if (pr?.publications_they_read) personaParts.push(`Sources they read: ${pr.publications_they_read}`);
+      if (pr?.language_cues) personaParts.push(`Language/jargon: ${pr.language_cues}`);
+      const captureTopics = recentPosts?.length > 0 ? recentPosts.slice(0, 4).map(p => p.post_text?.slice(0, 80)).filter(Boolean).join(' | ') : '';
+      const personaBlock = personaParts.length > 0 ? `THIS PERSON'S WORLD:\n${personaParts.join('\n')}\n\n` : '';
+
+      const resp = await callClaude(
+        `Today is ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. You find specific, surprising things happening RIGHT NOW in 2026 that would make this particular person stop scrolling and think "I need to weigh in on this." You understand their niche, their competitive landscape, and what keeps them up at night. Search for the very latest 2026 news and data. Return ONLY valid JSON, no markdown fences.`,
+        `${personaBlock}${captureTopics ? `TOPICS THEY ENGAGE WITH: ${captureTopics}\n\n` : ''}TODAY'S DATE: ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}\n\nSearch for what's happening in ${industry} THIS WEEK in 2026. Find 6 things that this specific person — in their specific role, at their specific company, in their specific corner of ${industry} — would have a strong, informed opinion about.
+
+Rules:
+- Each headline must be a SPECIFIC EVENT or DATA POINT, not a topic area. Not "AI in retail" but "Target just cut 200 category management roles and replaced them with an AI tool from Relex Solutions"
+- Name real companies, real people, real numbers, real dates
+- Find the TENSION — where should smart people disagree? What just changed? What did everyone miss?
+- No evergreen advice. No "trends to watch." Only things that happened recently or data that just dropped.
+- 3 topics from their core niche using sources most people haven't seen: ${pr?.publications_they_read || 'trade publications, earnings calls, SEC filings, industry data releases'}. Skip anything already viral on LinkedIn.
+- 2 "discovery" topics from ADJACENT areas where this person's expertise gives them a unique angle others don't have.${pr?.discovery_topics ? ' Adjacent areas: ' + pr.discovery_topics : ''} These should feel like "I never thought to write about that but I actually know a lot about it."
+- 1 bigger news story with a non-obvious angle only this person would see
+${pr?.anti_topics ? '- NEVER suggest topics in these areas (outside their credibility): ' + pr.anti_topics : ''}
+
+Return a JSON array. Each item: {"headline":"the specific thing that happened — punchy and concrete","context":"2-3 sentences with numbers and why it matters","why":"the debate angle that would spark real comments"}
+
+JSON array only, 6 items.`,
         { useWebSearch: true }
       );
-      update("researcher", { status: "done", result: research });
+      const cleaned = resp.replace(/```json\s?|```/g, "").trim();
+      // Extract JSON array even if there's text around it
+      const arrMatch = cleaned.match(/\[[\s\S]*\]/);
+      if (!arrMatch) throw new Error("No JSON array in response");
+      const parsed = JSON.parse(arrMatch[0]);
+      setIdeas(Array.isArray(parsed) ? parsed : []);
+    } catch (err) {
+      console.error("Ideas fetch failed:", err.message);
+      alert("Topic search failed: " + err.message);
+      setIdeas([]);
+    }
+    setLoadingIdeas(false);
+  };
 
-      // Agent 2: Draft
-      update("drafter", { status: "running" });
-      const draftResult = await callClaude(
-        getDrafterPrompt(industry, toneLabel, mlResults.totalPosts, profile?.brand_voice, profile?.product_name, profile?.product_description),
-        `ML PATTERNS:\n${insights}\n\nTRENDING TOPICS:\n${research}\n\n${extra ? `EXTRA CONTEXT: ${extra}` : ""}`
+  const selectTopic = (topicText) => {
+    setTopic(topicText);
+    setBlocks([]);
+    setScoreResult(null);
+    open("landscape");
+    fetchLandscape(topicText);
+  };
+
+  // ─── Landscape: Research ────────────────────────────────
+  const fetchLandscape = async (topicText) => {
+    setLoadingLandscape(true);
+    try {
+      const resp = await callClaude(
+        `Today is ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. You are a ${industry} research assistant. Search for current 2026 information about this topic. Return ONLY valid JSON, no markdown fences.`,
+        `Topic: "${topicText}"\n\nToday's date: ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. Search for the latest 2026 data, news, and perspectives on this topic in ${industry}. Prioritize data from 2025-2026. Return JSON:\n{"facts":["specific data point or stat with source",...6-8 items],"angles":["one sentence framing of a possible post angle",...3-4 items],"stakeholders":["affected role/group",...4-6 items]}\n\nEvery fact must include a specific number, company, or data point. JSON only.`,
+        { useWebSearch: true }
       );
-      update("drafter", { status: "done", result: draftResult });
-      setDraft(draftResult);
+      const data = JSON.parse(resp.replace(/```json\s?|```/g, "").trim());
+      setFacts((data.facts || []).map((t) => ({ text: t.trim(), enabled: true })));
+      setAngles((data.angles || []).map((t) => ({ text: t, selected: false })));
+      setStakeholders((data.stakeholders || []).map((n) => ({ name: n, selected: false })));
+      open("take");
+    } catch (err) {
+      console.warn("Landscape fetch failed:", err.message);
+    }
+    setLoadingLandscape(false);
+  };
 
-      // Agent 3: Validate (paid tier only)
-      if (profile?.tier === "paid") {
-        update("validator", { status: "running" });
-        try {
-          const [tavilyResult, perplexityResult] = await Promise.allSettled([
-            validateDraft(draftResult),
-            enrichWithContext(draftResult, industry),
-          ]);
+  // ─── What about? (add to landscape) ─────────────────────
+  const handleWhatAbout = async () => {
+    if (!whatAbout.trim()) return;
+    const q = whatAbout.trim();
+    setWhatAbout("");
+    try {
+      const resp = await callClaude(
+        `You are a ${industry} research assistant. Return ONLY valid JSON.`,
+        `The user is writing about "${topic}" and asks: "What about ${q}?"\n\nSearch for relevant data. Return JSON: {"facts":["specific data point",...2-3 items],"angles":["possible angle incorporating this",...1 item]}\nJSON only.`,
+        { useWebSearch: true }
+      );
+      const data = JSON.parse(resp.replace(/```json\s?|```/g, "").trim());
+      if (data.facts) setFacts((prev) => [...prev, ...data.facts.map((t) => ({ text: t.trim(), enabled: true }))]);
+      if (data.angles) setAngles((prev) => [...prev, ...data.angles.map((t) => ({ text: t, selected: false }))]);
+    } catch { /* silent */ }
+  };
 
-          const tavilyData = tavilyResult.status === "fulfilled" ? tavilyResult.value : null;
-          const perplexityData = perplexityResult.status === "fulfilled" ? perplexityResult.value : null;
+  // ─── Draft generation ───────────────────────────────────
+  const generateDraft = async () => {
+    if (!canGenerate) return;
+    setLoadingDraft(true);
+    open("draft");
 
-          let validationSummary = "";
-          if (tavilyData) validationSummary += `FACT CHECK:\n${tavilyData.summary}\n\n`;
-          if (perplexityData?.enrichment) validationSummary += `CONTEXT ENRICHMENT:\n${perplexityData.enrichment}`;
+    const selectedFacts = facts.filter((f) => f.enabled).map((f) => f.text);
+    const selectedAngles = angles.filter((a) => a.selected).map((a) => a.text);
+    const selectedAudience = stakeholders.filter((s) => s.selected).map((s) => s.name);
+    const hasML = !!mlResults;
+    const effectiveResults = mlResults || getSeedPatterns(industry);
+    const insights = hasML ? formatInsightsForPrompt(effectiveResults) : "";
 
-          update("validator", { status: "done", result: validationSummary || "Validation complete." });
-          setValidation(tavilyData);
-        } catch (valErr) {
-          update("validator", { status: "done", result: `Validation error: ${valErr.message}` });
-        }
-      }
+    const userMessage = [
+      `TOPIC: ${topic}`,
+      selectedFacts.length ? `\nSELECTED FACTS (use as supporting evidence):\n${selectedFacts.map((f) => `- ${f}`).join("\n")}` : "",
+      selectedAngles.length ? `\nANGLE:\n${selectedAngles.join("\n")}` : "",
+      selectedAudience.length ? `\nAUDIENCE: ${selectedAudience.join(", ")}` : "",
+      take.trim() ? `\nTHE USER'S TAKE (this is the CORE INSIGHT — build the post around this):\n${take}` : "",
+      insights ? `\nPATTERN DATA:\n${insights}` : "",
+    ].filter(Boolean).join("\n");
+
+    try {
+      const resp = await callClaude(
+        getDrafterPrompt(industry, "Thought Leader", effectiveResults?.totalPosts || 0, profile?.brand_voice, profile?.product_name, profile?.product_description, profile?.linkedin_context, profile?.voice_profile, profile?.persona_research)
+          .replace(/Write two drafts[\s\S]*$/, "Write ONE draft. The user's take is the thesis. Use the selected facts as supporting evidence. Frame it for the selected audience. The user's words and viewpoint drive the post — you're structuring and polishing their thinking, not replacing it.\n\nNo meta-commentary. No explanations. Just the post, ready to paste into LinkedIn."),
+        userMessage,
+        { model: "claude-opus-4-6" }
+      );
+      const cleaned = cleanDraft(resp);
+      const paragraphs = cleaned.split(/\n\n+/).filter((p) => p.trim());
+      setBlocks(paragraphs.map((text, i) => ({ id: `b-${Date.now()}-${i}`, text: text.trim() })));
+      recordGeneration();
+      open("check");
+
+      // Auto-score
+      const s = quickScore(cleaned);
+      setScoreResult(s);
+
+      // Extract hashtag suggestions
+      const tags = cleaned.match(/#[\w]+/g) || [];
+      setHashtags(tags.map((t) => ({ tag: t, enabled: true })));
 
       setTimeout(() => draftRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
+
+      // Reset refinement state for new draft
+      setRefineHistory([]);
+      setValidation(null);
+      setGems([]);
     } catch (err) {
-      setError(err.message);
+      console.error("Draft generation failed:", err.message);
+      alert("Draft failed: " + err.message);
     }
-    setRunning(false);
+    setLoadingDraft(false);
   };
+
+  // ─── Block operations ───────────────────────────────────
+  const updateBlock = (id, newText) => {
+    setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, text: newText } : b));
+    setEditingBlock(null);
+    const s = quickScore(blocks.map((b) => b.id === id ? { ...b, text: newText } : b).map((b) => b.text).join("\n\n"));
+    setScoreResult(s);
+  };
+
+  const removeBlock = (id) => {
+    setBlocks((bs) => bs.filter((b) => b.id !== id));
+  };
+
+  const moveBlock = (id, dir) => {
+    setBlocks((bs) => {
+      const idx = bs.findIndex((b) => b.id === id);
+      if (idx < 0) return bs;
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= bs.length) return bs;
+      const copy = [...bs];
+      [copy[idx], copy[newIdx]] = [copy[newIdx], copy[idx]];
+      return copy;
+    });
+  };
+
+  const sharpenBlock = async (id) => {
+    setSharpeningBlock(id);
+    const block = blocks.find((b) => b.id === id);
+    if (!block) { setSharpeningBlock(null); return; }
+    try {
+      const resp = await callClaude(
+        `Tighten this paragraph. Add specificity. Return ONLY the rewritten paragraph, nothing else.
+
+Do NOT add em dashes (—), emoji, single-sentence dramatic lines, or formal consulting language. Do NOT use: landscape, navigate, nuanced, robust, delve, foster, leverage, holistic, paradigm, synergy, unlock, lean into. Keep the conversational tone. Use contractions. Vary sentence length.`,
+        `PARAGRAPH:\n${block.text}\n\nCONTEXT: This is part of a ${industry} LinkedIn post.`
+      );
+      updateBlock(id, resp.trim());
+    } catch { /* silent */ }
+    setSharpeningBlock(null);
+  };
+
+  const insertBlock = (afterId) => {
+    const newBlock = { id: `b-${Date.now()}`, text: "" };
+    setBlocks((bs) => {
+      const idx = bs.findIndex((b) => b.id === afterId);
+      const copy = [...bs];
+      copy.splice(idx + 1, 0, newBlock);
+      return copy;
+    });
+    setEditingBlock(newBlock.id);
+    setEditText("");
+  };
+
+  // ─── Conversational Refinement ─────────────────────────
+  const refineDraft = async () => {
+    if (!refineInput.trim() || !blocks.length) return;
+    const feedback = refineInput.trim();
+    setRefineInput("");
+    setRefining(true);
+    setRefineHistory(prev => [...prev, { role: "user", text: feedback }]);
+    try {
+      const resp = await callClaude(
+        `You are helping refine a LinkedIn post draft. The user will give you their current draft and feedback on what to change. Apply their feedback precisely. Return ONLY the revised full post — every paragraph, no explanations, no meta-commentary. Maintain the original voice, structure, and length unless the feedback specifically asks to change those.`,
+        `CURRENT DRAFT:\n${fullDraftText}\n\n${refineHistory.length > 0 ? `PREVIOUS FEEDBACK APPLIED:\n${refineHistory.filter(h => h.role === 'user').map(h => '- ' + h.text).join('\n')}\n\n` : ''}NEW FEEDBACK:\n${feedback}\n\nRevise the draft based on this feedback. Return the full revised post only.`,
+        { model: "claude-opus-4-6" }
+      );
+      const cleaned = cleanDraft(resp);
+      const paragraphs = cleaned.split(/\n\n+/).filter(p => p.trim());
+      setBlocks(paragraphs.map((text, i) => ({ id: `b-${Date.now()}-${i}`, text: text.trim() })));
+      setRefineHistory(prev => [...prev, { role: "ella", text: `Applied: ${feedback}` }]);
+      const s = quickScore(cleaned);
+      setScoreResult(s);
+    } catch (err) {
+      console.warn("Refine failed:", err.message);
+    }
+    setRefining(false);
+  };
+
+  // ─── Auto-Validation ─────────────────────────────────────
+  const validateDraft = async () => {
+    if (!blocks.length) return;
+    setValidating(true);
+    try {
+      const resp = await callClaude(
+        `Today is ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. You are a fact-checker and research enricher. Search the web to verify claims in this LinkedIn post draft and find additional relevant data that could strengthen it. Return ONLY valid JSON, no markdown fences.`,
+        `DRAFT TO VALIDATE:\n${fullDraftText}\n\nFor each factual claim, statistic, or company reference in this draft:\n1. Search to verify if it's accurate and current (2025-2026 data preferred)\n2. Find any corrections needed\n3. Find additional data points that could strengthen the post\n\nReturn JSON:\n{"claims":[{"text":"the claim from the draft","status":"verified|outdated|unverified|incorrect","note":"what you found — correct number, source, or correction needed"}],"enrichments":["additional relevant data point or stat not in the draft that could strengthen it — be specific with numbers and sources"]}`,
+        { useWebSearch: true }
+      );
+      const cleaned = resp.replace(/```json\s?|```/g, "").trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        setValidation(JSON.parse(jsonMatch[0]));
+      }
+    } catch (err) {
+      console.warn("Validation failed:", err.message);
+    }
+    setValidating(false);
+  };
+
+  // ─── Second Perspective (Sonnet draft → extract gems) ────
+  const fetchSecondPerspective = async () => {
+    if (!blocks.length) return;
+    setLoadingGems(true);
+    try {
+      // Step 1: Generate a Sonnet draft of the same brief
+      const selectedFacts = facts.filter(f => f.enabled).map(f => f.text);
+      const brief = `TOPIC: ${topic}\n${selectedFacts.length ? `FACTS: ${selectedFacts.join('; ')}` : ''}\n${take.trim() ? `TAKE: ${take}` : ''}`;
+
+      const sonnetDraft = await callClaude(
+        `You are a different writer tackling the same topic. Write a LinkedIn post from a DIFFERENT angle than the original. Be more concise, more provocative, or more data-forward — whatever the original draft ISN'T. No meta-commentary. Just the post.`,
+        `BRIEF:\n${brief}\n\nORIGINAL DRAFT (write something DIFFERENT, not a rewrite):\n${fullDraftText.slice(0, 1500)}\n\nWrite an alternative post on the same topic with a genuinely different approach.`
+      );
+
+      // Step 2: Extract gems — lines that are meaningfully different
+      const gemsResp = await callClaude(
+        `Compare two LinkedIn post drafts on the same topic. Extract 3-5 specific lines, phrases, data framings, or angles from Draft B that are genuinely different from Draft A and could strengthen it. Return ONLY valid JSON.`,
+        `DRAFT A (the primary):\n${fullDraftText.slice(0, 1500)}\n\nDRAFT B (the alternative):\n${sonnetDraft.slice(0, 1500)}\n\nExtract the "gems" from Draft B — specific lines or angles that Draft A is missing. Not generic improvements, but concrete text that could be inserted or swapped in.\n\nReturn JSON array: [{"text":"the specific line or angle from Draft B","why":"one sentence on why this strengthens Draft A"}]`
+      );
+      const cleaned = gemsResp.replace(/```json\s?|```/g, "").trim();
+      const arrMatch = cleaned.match(/\[[\s\S]*\]/);
+      if (arrMatch) {
+        const parsed = JSON.parse(arrMatch[0]);
+        setGems(parsed.map(g => ({ ...g, used: false })));
+      }
+    } catch (err) {
+      console.warn("Second perspective failed:", err.message);
+    }
+    setLoadingGems(false);
+  };
+
+  // ─── Copy ───────────────────────────────────────────────
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(fullDraftText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // ═══ RENDER ═════════════════════════════════════════════
+
+  const tierLabel = !industry ? "Set your industry in Settings"
+    : postCount >= 50 ? "Writing with very strong patterns"
+    : postCount >= 20 ? "Writing with strong patterns"
+    : postCount >= 1 ? `Writing with early patterns from ${postCount} posts`
+    : `Writing with ${industry} knowledge`;
 
   return (
     <div>
-      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>Generate Post</h2>
-      <p style={{ color: "#666", fontSize: 13, marginBottom: 24 }}>
-        AI agents use your ML patterns + live research to craft optimized posts
-      </p>
-
-      {!mlResults ? (
-        <div style={{ textAlign: "center", padding: "60px 0" }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>🔬</div>
-          <div style={{ fontSize: 14, color: "#888" }}>Run ML Analysis first to discover your engagement patterns.</div>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+        <div>
+          <h2 style={{ fontSize: 24, fontWeight: 400, marginBottom: 2, fontFamily: "'DM Serif Display', serif", color: "#2D2520" }}>Create</h2>
+          {profile?.linkedin_context?.name && (
+            <p style={{ fontSize: 12, color: "#6B9E7D", margin: 0 }}>
+              Writing as <strong>{profile.linkedin_context.name}</strong>
+            </p>
+          )}
         </div>
-      ) : (
-        <>
-          {/* Controls */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: "#888", display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Tone</label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {TONES.map((t) => (
-                  <button key={t.id} onClick={() => setTone(t.id)} style={{
-                    background: tone === t.id ? "rgba(232,168,56,0.12)" : "rgba(255,255,255,0.025)",
-                    border: `1.5px solid ${tone === t.id ? "#E8A838" : "#222"}`,
-                    borderRadius: 8, padding: "10px", cursor: "pointer", textAlign: "center",
-                    fontSize: 13, fontWeight: 700, color: tone === t.id ? "#E8A838" : "#888",
-                  }}>{t.label}</button>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 11, color: "#8B7E74", background: "#F7F3EE", padding: "4px 10px", borderRadius: 12 }}>{tierLabel}</div>
+          <div style={{ fontSize: 10, color: "#B5A698", marginTop: 4 }}>{remaining}/{monthlyLimit} generations this month</div>
+        </div>
+      </div>
+
+      {/* Topic bar — persistent when topic is set */}
+      {topic && (
+        <div style={{
+          padding: "10px 16px", background: "rgba(232,102,74,0.04)", border: "1px solid rgba(232,102,74,0.12)",
+          borderRadius: 10, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+          <div style={{ fontSize: 13, color: "#2D2520", fontWeight: 600 }}>{topic.slice(0, 120)}{topic.length > 120 ? "..." : ""}</div>
+          <button onClick={() => { setTopic(""); setBlocks([]); setFacts([]); setAngles([]); setStakeholders([]); }}
+            style={{ background: "none", border: "none", color: "#B5A698", cursor: "pointer", fontSize: 12 }}>Change topic</button>
+        </div>
+      )}
+
+      {/* ─── SECTION 1: SPARK ─────────────────────────────── */}
+      <Section id="spark" title="What caught your eye?" expanded={expanded.spark} onToggle={() => toggle("spark")}>
+        <div style={{ display: "flex", gap: 6, marginBottom: 16, marginTop: 12 }}>
+          {[["ideas", "Ella's Picks"], ["custom", "Your Spark"], ["captures", "From Captures"]].map(([id, label]) => (
+            <button key={id} onClick={() => setSparkTab(id)} style={{
+              padding: "6px 14px", borderRadius: 16, border: `1.5px solid ${sparkTab === id ? "#E8664A" : "#E8E2DA"}`,
+              background: sparkTab === id ? "rgba(232,102,74,0.08)" : "#fff",
+              color: sparkTab === id ? "#E8664A" : "#8B7E74", fontSize: 12, fontWeight: 600, cursor: "pointer",
+            }}>{label}</button>
+          ))}
+        </div>
+
+        {sparkTab === "ideas" && (
+          <div>
+            {!industry ? (
+              <div style={{ padding: "16px", background: "#F7F3EE", borderRadius: 10, fontSize: 12, color: "#8B7E74", lineHeight: 1.5 }}>
+                Set your industry in <a href="/settings" style={{ color: "#E8664A", fontWeight: 600, textDecoration: "none" }}>Settings</a> to get personalized topic suggestions.
+              </div>
+            ) : (
+            <button onClick={fetchIdeas} disabled={loadingIdeas} style={{
+              padding: "10px 20px", border: "none", borderRadius: 20,
+              background: loadingIdeas ? "#E8E2DA" : "#E8664A", color: loadingIdeas ? "#B5A698" : "#fff",
+              fontSize: 13, fontWeight: 600, cursor: loadingIdeas ? "wait" : "pointer", marginBottom: 12,
+            }}>{loadingIdeas ? "Searching..." : `What's happening in ${industry}?`}</button>
+            )}
+            {industry && ideas.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {ideas.map((idea, i) => (
+                  <button key={i} onClick={() => selectTopic(idea.headline || idea)} style={{
+                    textAlign: "left", padding: "12px 16px", background: "#F7F3EE", border: "1px solid #EDE8E1",
+                    borderRadius: 10, cursor: "pointer", transition: "border-color 0.15s",
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#2D2520", marginBottom: 4 }}>{idea.headline || idea}</div>
+                    {idea.context && <div style={{ fontSize: 11, color: "#5C534A", lineHeight: 1.5 }}>{idea.context}</div>}
+                    {idea.why && <div style={{ fontSize: 10, color: "#B5A698", marginTop: 4 }}>{idea.why}</div>}
+                  </button>
                 ))}
               </div>
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: "#888", display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                Extra Context <span style={{ color: "#444", fontWeight: 400 }}>(optional)</span>
-              </label>
-              <textarea value={extra} onChange={(e) => setExtra(e.target.value)}
-                placeholder="Product launch, event, specific angle..."
-                style={{
-                  width: "100%", height: 96, background: "rgba(255,255,255,0.03)",
-                  border: "1.5px solid #222", borderRadius: 10, padding: "12px 14px",
-                  color: "#ddd", fontSize: 13, fontFamily: "inherit", resize: "none",
-                  outline: "none", boxSizing: "border-box", lineHeight: 1.5,
-                }}
-              />
+            )}
+          </div>
+        )}
+
+        {sparkTab === "custom" && (
+          <div>
+            <input value={customSpark} onChange={(e) => setCustomSpark(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && customSpark.trim() && selectTopic(customSpark.trim())}
+              placeholder="I saw something about... / I want to post about..."
+              style={{
+                width: "100%", padding: "12px 16px", border: "1.5px solid #E8E2DA", borderRadius: 10,
+                fontSize: 13, color: "#2D2520", outline: "none", background: "#fff", boxSizing: "border-box",
+              }} />
+            <button onClick={() => customSpark.trim() && selectTopic(customSpark.trim())}
+              disabled={!customSpark.trim()} style={{
+                marginTop: 8, padding: "8px 16px", borderRadius: 16, border: "none",
+                background: customSpark.trim() ? "#E8664A" : "#E8E2DA", color: customSpark.trim() ? "#fff" : "#B5A698",
+                fontSize: 12, fontWeight: 600, cursor: customSpark.trim() ? "pointer" : "not-allowed",
+              }}>Go</button>
+          </div>
+        )}
+
+        {sparkTab === "captures" && (
+          <div>
+            {recentPosts.length === 0 ? (
+              <p style={{ fontSize: 12, color: "#B5A698" }}>Capture some posts first to use them as inspiration.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {recentPosts.slice(0, 4).map((p) => (
+                  <button key={p.id} onClick={() => selectTopic(`Riff on: "${(p.post_text || "").slice(0, 150)}..." — ${p.author_name || "Unknown"} (${p.likes || 0} reactions)`)} style={{
+                    textAlign: "left", padding: "12px 16px", background: "#F7F3EE", border: "1px solid #EDE8E1",
+                    borderRadius: 10, cursor: "pointer",
+                  }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#2D2520" }}>{p.author_name || "Unknown"} — {p.likes || 0} reactions</div>
+                    <div style={{ fontSize: 11, color: "#5C534A", lineHeight: 1.5, marginTop: 4 }}>{(p.post_text || "").slice(0, 120)}...</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </Section>
+
+      {/* ─── SECTION 2: LANDSCAPE ─────────────────────────── */}
+      <Section id="landscape" title="Here's what Ella found" subtitle={loadingLandscape ? "Searching..." : facts.length ? `${facts.length} facts, ${angles.length} angles` : ""}
+        expanded={expanded.landscape} onToggle={() => toggle("landscape")}>
+
+        {loadingLandscape && <div style={{ padding: "20px 0", textAlign: "center", color: "#E8664A", fontSize: 13, fontWeight: 600 }}>Researching...</div>}
+
+        {facts.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 8 }}>Key Facts <span style={{ fontWeight: 400 }}>(toggle off what doesn't matter)</span></div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+              {facts.map((f, i) => (
+                <Pill key={i} active={f.enabled} onClick={() => setFacts((fs) => fs.map((ff, j) => j === i ? { ...ff, enabled: !ff.enabled } : ff))}>
+                  {f.enabled ? "☑" : "☐"} {f.text.slice(0, 80)}{f.text.length > 80 ? "..." : ""}
+                </Pill>
+              ))}
             </div>
           </div>
+        )}
 
-          {/* Pattern summary */}
-          <div style={{
-            background: "rgba(232,168,56,0.05)", border: "1px solid #E8A83822",
-            borderRadius: 10, padding: "12px 16px", marginBottom: 24,
-            fontSize: 12, color: "#999", fontFamily: "'JetBrains Mono', monospace",
-          }}>
-            <span style={{ color: "#E8A838", fontWeight: 700 }}>ML patterns loaded:</span>{" "}
-            {mlResults.totalPosts} posts, {mlResults.correlations.length} correlations,{" "}
-            {mlResults.differentialTerms.length} terms, {mlResults.bigramDiff.length} bigrams
+        {angles.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 8 }}>Angles</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {angles.map((a, i) => (
+                <AngleCard key={i} text={a.text} selected={a.selected}
+                  onClick={() => setAngles((as) => as.map((aa, j) => j === i ? { ...aa, selected: !aa.selected } : aa))} />
+              ))}
+              <input value={customAngle} onChange={(e) => setCustomAngle(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && customAngle.trim()) { setAngles((as) => [...as, { text: customAngle.trim(), selected: true }]); setCustomAngle(""); } }}
+                placeholder="Add your own angle..."
+                style={{ padding: "10px 14px", border: "1px dashed #E8E2DA", borderRadius: 10, fontSize: 12, color: "#2D2520", outline: "none", background: "#fff" }} />
+            </div>
           </div>
+        )}
 
-          <button onClick={generate} disabled={running} style={{
-            width: "100%", padding: "16px", border: "none", borderRadius: 12,
-            background: running ? "#333" : "linear-gradient(135deg, #E8A838, #D4782F)",
-            color: running ? "#666" : "#111", fontSize: 15, fontWeight: 800,
-            cursor: running ? "not-allowed" : "pointer", marginBottom: 28,
-          }}>{running ? "Agents Running..." : "Generate LinkedIn Post →"}</button>
+        {stakeholders.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 8 }}>Who are you writing for?</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+              {stakeholders.map((s, i) => (
+                <Pill key={i} active={s.selected} onClick={() => setStakeholders((ss) => ss.map((ss2, j) => j === i ? { ...ss2, selected: !ss2.selected } : ss2))}>
+                  {s.name}
+                </Pill>
+              ))}
+            </div>
+          </div>
+        )}
 
-          {error && (
-            <div style={{
-              background: "#2a1515", border: "1px solid #552222", borderRadius: 10,
-              padding: "12px 16px", marginBottom: 20, color: "#ff8888", fontSize: 13,
-            }}>{error}</div>
+        {/* What about? */}
+        {topic && (
+          <div style={{ marginTop: 16, display: "flex", gap: 6 }}>
+            <input value={whatAbout} onChange={(e) => setWhatAbout(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleWhatAbout()}
+              placeholder="What about...? (add a thread you want Ella to research)"
+              style={{ flex: 1, padding: "8px 12px", border: "1px solid #E8E2DA", borderRadius: 8, fontSize: 12, color: "#2D2520", outline: "none" }} />
+            <button onClick={handleWhatAbout} disabled={!whatAbout.trim()} style={{
+              padding: "8px 14px", borderRadius: 8, border: "none",
+              background: whatAbout.trim() ? "#E8664A" : "#E8E2DA", color: whatAbout.trim() ? "#fff" : "#B5A698",
+              fontSize: 12, fontWeight: 600, cursor: whatAbout.trim() ? "pointer" : "not-allowed",
+            }}>+</button>
+          </div>
+        )}
+      </Section>
+
+      {/* ─── SECTION 3: YOUR TAKE ─────────────────────────── */}
+      <Section id="take" title="What's your take?" subtitle="The insight only you can add"
+        expanded={expanded.take} onToggle={() => toggle("take")}>
+        <div style={{ marginTop: 12 }}>
+          {!take && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+              {["I think most people are missing...", "The real risk here is...", "This reminds me of when...", "Everyone's focused on X but the real story is..."].map((prompt) => (
+                <button key={prompt} onClick={() => setTake(prompt)} style={{
+                  padding: "5px 10px", borderRadius: 12, border: "1px solid #EDE8E1",
+                  background: "#F7F3EE", color: "#8B7E74", fontSize: 11, cursor: "pointer",
+                }}>{prompt}</button>
+              ))}
+            </div>
           )}
+          <textarea value={take} onChange={(e) => setTake(e.target.value)}
+            placeholder="What's the connection nobody's making? What would you tell a colleague over coffee?"
+            style={{
+              width: "100%", minHeight: 100, border: "1.5px solid #E8E2DA", borderRadius: 10,
+              padding: "14px", fontSize: 13, color: "#2D2520", fontFamily: "inherit",
+              resize: "vertical", outline: "none", lineHeight: 1.6, background: "#fff", boxSizing: "border-box",
+            }} />
+        </div>
+      </Section>
 
-          {/* Agent cards */}
-          {(agents.researcher.status !== "idle" || agents.drafter.status !== "idle") && (
-            <div style={{ marginBottom: 28 }}>
-              <AgentCard icon="🌐" label="Topic Scout" description={`Searching trending ${industry} topics`} color="#4CAF7D" {...agents.researcher} />
-              <AgentCard icon="✍️" label="Draft Writer" description="Applying ML patterns to craft posts" color="#5B8DEF" {...agents.drafter} />
-              {profile?.tier === "paid" ? (
-                <AgentCard icon="🔍" label="Fact Validator" description="Verifying claims via Tavily & Perplexity" color="#E85B5B" {...agents.validator} />
-              ) : (
-                <PricingGate tier={profile?.tier} feature="Real-Time Fact Validation">
-                  <AgentCard icon="🔍" label="Fact Validator" description="Verifying claims via Tavily & Perplexity" color="#E85B5B" status="idle" result={null} />
-                </PricingGate>
+      {/* ─── SECTION 4: DRAFT ─────────────────────────────── */}
+      <Section id="draft" title="Ella's draft" subtitle={blocks.length ? `${fullDraftText.length} characters` : ""}
+        expanded={expanded.draft} onToggle={() => toggle("draft")}
+        badge={canGenerate && blocks.length === 0 ? <button onClick={generateDraft} disabled={loadingDraft} style={{
+          padding: "6px 14px", borderRadius: 16, border: "none", background: loadingDraft ? "#E8E2DA" : "#E8664A",
+          color: loadingDraft ? "#B5A698" : "#fff", fontSize: 12, fontWeight: 600, cursor: loadingDraft ? "wait" : "pointer",
+        }}>{loadingDraft ? "Writing..." : "Write it"}</button> : null}>
+
+        <div ref={draftRef} style={{ marginTop: 12 }}>
+          {loadingDraft && <div style={{ textAlign: "center", padding: "30px 0", color: "#E8664A", fontSize: 14, fontWeight: 600 }}>Writing your draft...</div>}
+
+          {blocks.length > 0 && (
+            <div>
+              {blocks.map((block, i) => (
+                <div key={block.id} style={{ position: "relative", marginBottom: 4, group: true }}>
+                  {editingBlock === block.id ? (
+                    <div>
+                      <textarea value={editText} onChange={(e) => setEditText(e.target.value)}
+                        style={{ width: "100%", minHeight: 60, padding: "10px", border: "1.5px solid #E8664A", borderRadius: 8, fontSize: 13, fontFamily: "inherit", lineHeight: 1.6, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+                      <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                        <button onClick={() => { updateBlock(block.id, editText); }} style={{ padding: "4px 10px", borderRadius: 12, border: "none", background: "#E8664A", color: "#fff", fontSize: 11, cursor: "pointer" }}>Save</button>
+                        <button onClick={() => setEditingBlock(null)} style={{ padding: "4px 10px", borderRadius: 12, border: "1px solid #E8E2DA", background: "#fff", color: "#8B7E74", fontSize: 11, cursor: "pointer" }}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{
+                      padding: "10px 14px", borderRadius: 8, border: "1px solid transparent",
+                      fontSize: 13, color: "#2D2520", lineHeight: 1.7, whiteSpace: "pre-wrap",
+                      transition: "border-color 0.15s, background 0.15s",
+                    }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#EDE8E1"; e.currentTarget.style.background = "#FDFCFA"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}>
+                      {block.text}
+                      <div style={{ display: "flex", gap: 4, marginTop: 6, opacity: 0.6 }}
+                        onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
+                        onMouseLeave={(e) => e.currentTarget.style.opacity = 0.6}>
+                        <button onClick={() => { setEditingBlock(block.id); setEditText(block.text); }} style={{ padding: "2px 8px", borderRadius: 8, border: "1px solid #E8E2DA", background: "#fff", color: "#8B7E74", fontSize: 10, cursor: "pointer" }}>Edit</button>
+                        <button onClick={() => sharpenBlock(block.id)} disabled={sharpeningBlock === block.id} style={{ padding: "2px 8px", borderRadius: 8, border: "1px solid #E8E2DA", background: "#fff", color: sharpeningBlock === block.id ? "#B5A698" : "#8B7E74", fontSize: 10, cursor: "pointer" }}>{sharpeningBlock === block.id ? "..." : "Sharpen"}</button>
+                        <button onClick={() => moveBlock(block.id, -1)} disabled={i === 0} style={{ padding: "2px 6px", borderRadius: 8, border: "1px solid #E8E2DA", background: "#fff", color: "#B5A698", fontSize: 10, cursor: "pointer" }}>↑</button>
+                        <button onClick={() => moveBlock(block.id, 1)} disabled={i === blocks.length - 1} style={{ padding: "2px 6px", borderRadius: 8, border: "1px solid #E8E2DA", background: "#fff", color: "#B5A698", fontSize: 10, cursor: "pointer" }}>↓</button>
+                        <button onClick={() => removeBlock(block.id)} style={{ padding: "2px 8px", borderRadius: 8, border: "1px solid #E8E2DA", background: "#fff", color: "#D4695A", fontSize: 10, cursor: "pointer" }}>Remove</button>
+                      </div>
+                    </div>
+                  )}
+                  {/* Insert between blocks */}
+                  <div style={{ textAlign: "center", height: 16 }}>
+                    <button onClick={() => insertBlock(block.id)} style={{ background: "none", border: "none", color: "#E8E2DA", fontSize: 16, cursor: "pointer", lineHeight: 1 }}
+                      onMouseEnter={(e) => e.currentTarget.style.color = "#E8664A"}
+                      onMouseLeave={(e) => e.currentTarget.style.color = "#E8E2DA"}>+</button>
+                  </div>
+                </div>
+              ))}
+
+              {/* ── Conversational Refinement ── */}
+              <div style={{ marginTop: 16, padding: "14px 16px", background: "#F7F3EE", borderRadius: 10 }}>
+                {refineHistory.length > 0 && (
+                  <div style={{ marginBottom: 10, maxHeight: 120, overflowY: "auto" }}>
+                    {refineHistory.map((h, i) => (
+                      <div key={i} style={{ fontSize: 11, color: h.role === "user" ? "#2D2520" : "#6B9E7D", marginBottom: 4 }}>
+                        <strong>{h.role === "user" ? "You" : "Ella"}:</strong> {h.text}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    value={refineInput}
+                    onChange={(e) => setRefineInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && !refining && refineDraft()}
+                    placeholder="Tell Ella what to change..."
+                    disabled={refining}
+                    style={{
+                      flex: 1, padding: "10px 14px", border: "1.5px solid #E8E2DA", borderRadius: 10,
+                      fontSize: 13, color: "#2D2520", outline: "none", background: "#fff",
+                      fontFamily: "inherit", boxSizing: "border-box",
+                    }}
+                  />
+                  <button onClick={refineDraft} disabled={refining || !refineInput.trim()} style={{
+                    padding: "10px 16px", borderRadius: 10, border: "none",
+                    background: refining ? "#E8E2DA" : "#E8664A", color: refining ? "#B5A698" : "#fff",
+                    fontSize: 12, fontWeight: 600, cursor: refining ? "wait" : "pointer", whiteSpace: "nowrap",
+                  }}>{refining ? "Revising..." : "Revise"}</button>
+                </div>
+              </div>
+
+              {/* ── Validate + Second Perspective Buttons ── */}
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <button onClick={validateDraft} disabled={validating} style={{
+                  padding: "8px 14px", borderRadius: 16, border: "1px solid #E8E2DA", background: "#fff",
+                  color: validating ? "#B5A698" : "#5C534A", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                }}>{validating ? "Checking facts..." : validation ? "Re-validate" : "Validate facts"}</button>
+                <button onClick={fetchSecondPerspective} disabled={loadingGems} style={{
+                  padding: "8px 14px", borderRadius: 16, border: "1px solid #E8E2DA", background: "#fff",
+                  color: loadingGems ? "#B5A698" : "#5C534A", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                }}>{loadingGems ? "Finding gems..." : gems.length ? "New perspective" : "Second perspective"}</button>
+                <button onClick={generateDraft} disabled={loadingDraft} style={{
+                  padding: "8px 14px", borderRadius: 16, border: "1px solid #E8E2DA", background: "#fff",
+                  color: "#5C534A", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                }}>Rewrite from scratch</button>
+              </div>
+
+              {/* ── Validation Results ── */}
+              {validation && (
+                <div style={{ marginTop: 12, padding: "14px 16px", background: "#fff", border: "1px solid #EDE8E1", borderRadius: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 8 }}>Fact Check</div>
+                  {validation.claims?.map((c, i) => (
+                    <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, fontSize: 12, lineHeight: 1.5 }}>
+                      <span style={{
+                        flexShrink: 0, width: 18, height: 18, borderRadius: "50%", display: "flex",
+                        alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700,
+                        background: c.status === "verified" ? "rgba(107,158,125,0.1)" : c.status === "incorrect" ? "rgba(212,105,90,0.1)" : "rgba(181,166,152,0.1)",
+                        color: c.status === "verified" ? "#6B9E7D" : c.status === "incorrect" ? "#D4695A" : "#B5A698",
+                      }}>{c.status === "verified" ? "✓" : c.status === "incorrect" ? "✗" : "?"}</span>
+                      <div>
+                        <span style={{ color: "#2D2520" }}>{c.text?.slice(0, 80)}</span>
+                        {c.note && <div style={{ color: "#8B7E74", fontSize: 11, marginTop: 2 }}>{c.note}</div>}
+                      </div>
+                    </div>
+                  ))}
+                  {validation.enrichments?.length > 0 && (
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #F0EBE4" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#E8664A", marginBottom: 6 }}>Could strengthen your post</div>
+                      {validation.enrichments.map((e, i) => (
+                        <div key={i} style={{
+                          fontSize: 12, color: "#5C534A", lineHeight: 1.5, marginBottom: 4,
+                          padding: "6px 10px", background: "#FDFCFA", borderRadius: 6, cursor: "pointer",
+                        }}
+                          onClick={() => setRefineInput(`Add this data point: ${e}`)}
+                          title="Click to add to refinement input">
+                          + {e}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Second Perspective Gems ── */}
+              {gems.length > 0 && (
+                <div style={{ marginTop: 12, padding: "14px 16px", background: "#fff", border: "1px solid #EDE8E1", borderRadius: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 8 }}>Gems from a different angle</div>
+                  {gems.map((g, i) => (
+                    <div key={i} style={{
+                      padding: "8px 12px", marginBottom: 6, borderRadius: 8,
+                      background: g.used ? "rgba(107,158,125,0.06)" : "#FDFCFA",
+                      border: `1px solid ${g.used ? "rgba(107,158,125,0.2)" : "#EDE8E1"}`,
+                      cursor: "pointer", transition: "border-color 0.15s",
+                    }}
+                      onClick={() => {
+                        if (!g.used) {
+                          setRefineInput(`Incorporate this idea into the draft: "${g.text}"`);
+                          setGems(prev => prev.map((gem, j) => j === i ? { ...gem, used: true } : gem));
+                        }
+                      }}>
+                      <div style={{ fontSize: 12, color: g.used ? "#6B9E7D" : "#2D2520", lineHeight: 1.5 }}>
+                        {g.used ? "✓ " : ""}{g.text}
+                      </div>
+                      {g.why && <div style={{ fontSize: 11, color: "#B5A698", marginTop: 2 }}>{g.why}</div>}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           )}
+        </div>
+      </Section>
 
-          {/* Draft output */}
-          {draft && (
-            <div ref={draftRef}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: 1.5 }}>
-                  Your LinkedIn Drafts
-                </div>
-                <button onClick={() => { navigator.clipboard.writeText(draft); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-                  style={{
-                    background: copied ? "#4CAF7D20" : "rgba(255,255,255,0.04)",
-                    border: `1px solid ${copied ? "#4CAF7D" : "#222"}`,
-                    borderRadius: 8, padding: "7px 14px", color: copied ? "#4CAF7D" : "#aaa",
-                    fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  }}>{copied ? "Copied!" : "Copy All"}</button>
+      {/* ─── SECTION 5: VISUAL DIRECTION ─────────────────── */}
+      {blocks.length > 0 && (() => {
+        const directions = analyzeVisualDirection(fullDraftText);
+        const brief = visualDirection ? generateVisualBrief(visualDirection, fullDraftText) : "";
+        return (
+          <Section id="visual" title="Stop the scroll" subtitle="Add a visual direction"
+            expanded={expanded.visual} onToggle={() => toggle("visual")}
+            badge={visualDirection ? <span style={{ fontSize: 11, color: "#6B9E7D", fontWeight: 600 }}>{VISUAL_DIRECTIONS[visualDirection]?.icon} {VISUAL_DIRECTIONS[visualDirection]?.label}</span> : null}>
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 10 }}>Recommended for your post</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+                {directions.map((dirId) => {
+                  const d = VISUAL_DIRECTIONS[dirId];
+                  if (!d) return null;
+                  const selected = visualDirection === dirId;
+                  return (
+                    <button key={dirId} onClick={() => setVisualDirection(selected ? null : dirId)} style={{
+                      textAlign: "left", padding: "14px 16px", borderRadius: 10,
+                      border: `1.5px solid ${selected ? "#E8664A" : "#EDE8E1"}`,
+                      background: selected ? "rgba(232,102,74,0.04)" : "#fff",
+                      cursor: "pointer", transition: "border-color 0.15s",
+                    }}>
+                      <div style={{ fontSize: 18, marginBottom: 4 }}>{d.icon}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#2D2520", marginBottom: 4 }}>{d.label}</div>
+                      <div style={{ fontSize: 11, color: "#8B7E74", lineHeight: 1.5 }}>{d.desc}</div>
+                    </button>
+                  );
+                })}
               </div>
-              <div style={{
-                background: "linear-gradient(135deg, rgba(232,168,56,0.04), rgba(91,141,239,0.04))",
-                border: "1.5px solid #222", borderRadius: 14, padding: "24px 28px",
-                fontSize: 13.5, lineHeight: 1.75, color: "#ddd", whiteSpace: "pre-wrap",
-              }}>{draft}</div>
 
-              {validation && <ValidationBadge validation={validation} />}
+              {/* Visual Brief */}
+              {brief && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase" }}>Visual Brief</div>
+                    <button onClick={() => { navigator.clipboard.writeText(brief); setVisualBriefCopied(true); setTimeout(() => setVisualBriefCopied(false), 2000); }}
+                      style={{ padding: "3px 10px", borderRadius: 12, border: "1px solid #E8E2DA", background: visualBriefCopied ? "rgba(107,158,125,0.08)" : "#fff", color: visualBriefCopied ? "#6B9E7D" : "#8B7E74", fontSize: 10, fontWeight: 600, cursor: "pointer" }}>
+                      {visualBriefCopied ? "Copied!" : "Copy brief"}
+                    </button>
+                  </div>
+                  <div style={{
+                    background: "#F7F3EE", borderRadius: 8, padding: "12px 14px",
+                    fontSize: 12, color: "#5C534A", lineHeight: 1.6, whiteSpace: "pre-wrap",
+                  }}>{brief}</div>
+                </div>
+              )}
+
+              {/* Best practices — collapsible */}
+              <details style={{ fontSize: 11, color: "#8B7E74" }}>
+                <summary style={{ cursor: "pointer", fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 6 }}>Visual best practices</summary>
+                <div style={{ lineHeight: 1.7, marginTop: 8, paddingLeft: 4 }}>
+                  <div>Mobile first — 60%+ of LinkedIn is on phones. Graphic must read as a thumbnail.</div>
+                  <div>One focal point — not three competing messages. One number. One face. One statement.</div>
+                  <div>High contrast — dark backgrounds with light text outperform pastels in feeds.</div>
+                  <div>Faces get attention — a human face increases stop rate when appropriate.</div>
+                  <div>Text on images — 7 words max. If it takes more than a glance, it fails.</div>
+                  <div>Carousels signal "worth saving" — saves are a strong algorithm quality signal.</div>
+                  <div>Avoid stock photo energy — LinkedIn users scroll past generic stock imagery.</div>
+                </div>
+              </details>
+
+              {/* ML pattern data if available */}
+              {mlResults?.mediaPerformance?.length > 0 && (
+                <div style={{ marginTop: 12, padding: "10px 14px", background: "rgba(232,102,74,0.04)", borderRadius: 8, fontSize: 11, color: "#5C534A" }}>
+                  <strong style={{ color: "#E8664A" }}>From your patterns:</strong>{" "}
+                  {mlResults.mediaPerformance.filter((m) => m.count > 0).slice(0, 2).map((m) => `${m.type} posts avg ${m.avgEngagement} engagement`).join(", ")}
+                </div>
+              )}
             </div>
-          )}
-        </>
+          </Section>
+        );
+      })()}
+
+      {/* ─── SECTION 6: FINAL CHECK ───────────────────────── */}
+      {blocks.length > 0 && (
+        <Section id="check" title="Ready?" expanded={expanded.check} onToggle={() => toggle("check")}
+          badge={scoreResult ? <span style={{
+            fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 12,
+            color: scoreResult.score >= 75 ? "#6B9E7D" : scoreResult.score >= 50 ? "#D4A853" : "#D4695A",
+            background: scoreResult.score >= 75 ? "rgba(107,158,125,0.08)" : scoreResult.score >= 50 ? "rgba(212,168,83,0.08)" : "rgba(212,105,90,0.08)",
+          }}>{scoreResult.score}/100</span> : null}>
+
+          <div style={{ marginTop: 12 }}>
+            {scoreResult && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 12, color: "#5C534A" }}>
+                  <span>Hook: {scoreResult.features.hook_char_count} chars {scoreResult.features.hook_under_fold ? "(under fold)" : "(over fold — tighten?)"}</span>
+                  <span>Length: {fullDraftText.length} chars</span>
+                  <span>Read time: {scoreResult.features.reading_time_seconds}s</span>
+                  <span>Hashtags: {scoreResult.features.hashtags}</span>
+                  <span>CTA: {scoreResult.features.cta_is_open_ended ? "open-ended question" : scoreResult.features.cta_is_question ? "question" : "no question — add one?"}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Hashtag toggles */}
+            {hashtags.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 6 }}>Hashtags</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {hashtags.map((h, i) => (
+                    <Pill key={i} active={h.enabled} onClick={() => setHashtags((hs) => hs.map((hh, j) => j === i ? { ...hh, enabled: !hh.enabled } : hh))}>
+                      {h.tag}
+                    </Pill>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Visual readiness */}
+            <div style={{ fontSize: 12, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+              {visualDirection ? (
+                <span style={{ color: "#6B9E7D" }}>{VISUAL_DIRECTIONS[visualDirection]?.icon} Visual: {VISUAL_DIRECTIONS[visualDirection]?.label} — create your graphic before posting</span>
+              ) : (
+                <span style={{ color: "#D4A853" }}>No visual selected — image posts get 40% more engagement. <button onClick={() => { open("visual"); }} style={{ background: "none", border: "none", color: "#E8664A", cursor: "pointer", fontSize: 12, fontWeight: 600, textDecoration: "underline", padding: 0 }}>Add one?</button></span>
+              )}
+            </div>
+
+            {/* Dimensions reference */}
+            <div style={{ fontSize: 10, color: "#B5A698", marginBottom: 16 }}>
+              Single image: 1200×627px · Carousel: 1080×1080px per slide
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={copyToClipboard} style={{
+                padding: "12px 28px", border: "none", borderRadius: 24,
+                background: copied ? "#6B9E7D" : "#E8664A", color: "#fff",
+                fontSize: 14, fontWeight: 700, cursor: "pointer",
+              }}>{copied ? "Copied!" : "Copy to Clipboard"}</button>
+            </div>
+          </div>
+        </Section>
       )}
     </div>
   );

@@ -1,0 +1,358 @@
+/* ═══════════════════════════════════════════════════════════
+   Ella — Popup Styles
+   Warm cream/coral theme matching getella.io
+   ═══════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Serif+Display&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 340px;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #F7F3EE;
+  color: #2D2520;
+}
+
+.popup {
+  padding: 20px;
+}
+
+/* ─── Header ──────────────────────────────────────────────── */
+
+.header {
+  text-align: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #E8E2DA;
+}
+
+.header__logo {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  margin-bottom: 6px;
+}
+
+.header__title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 22px;
+  font-weight: 400;
+  color: #2D2520;
+  letter-spacing: 0;
+}
+
+.header__subtitle {
+  font-size: 11px;
+  color: #B5A698;
+  margin-top: 3px;
+  letter-spacing: 0.3px;
+}
+
+/* ─── Form ────────────────────────────────────────────────── */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.input {
+  padding: 10px 12px;
+  border: 1px solid #E8E2DA;
+  border-radius: 10px;
+  background: #fff;
+  color: #2D2520;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.input:focus {
+  border-color: #E8664A;
+}
+
+.input::placeholder {
+  color: #B5A698;
+}
+
+/* ─── Buttons ─────────────────────────────────────────────── */
+
+.btn {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  transition: background 0.2s, opacity 0.2s;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  background: #E8664A;
+  color: #fff;
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: #D4563C;
+}
+
+.btn--secondary {
+  background: transparent;
+  color: #6B5E54;
+  border: 1px solid #E8E2DA;
+}
+
+.btn--secondary:hover:not(:disabled) {
+  background: #EFEBE5;
+}
+
+/* ─── Error ───────────────────────────────────────────────── */
+
+.error {
+  font-size: 12px;
+  color: #D4695A;
+  text-align: center;
+  padding: 4px 0;
+}
+
+/* ─── Progress ────────────────────────────────────────────── */
+
+.progress {
+  margin-bottom: 18px;
+}
+
+.progress__bar-wrap {
+  width: 100%;
+  height: 8px;
+  background: #EFEBE5;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress__bar {
+  height: 100%;
+  background: linear-gradient(90deg, #E8664A, #F0946E);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.progress__bar--complete {
+  background: linear-gradient(90deg, #6B9E7D, #8FBF9A);
+}
+
+.progress__text {
+  font-size: 12px;
+  color: #8B7E74;
+  text-align: center;
+}
+
+.progress__text--complete {
+  color: #6B9E7D;
+}
+
+/* ─── Stats ───────────────────────────────────────────────── */
+
+.stats {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.stat {
+  text-align: center;
+}
+
+.stat__value {
+  display: block;
+  font-family: 'DM Serif Display', serif;
+  font-size: 32px;
+  font-weight: 400;
+  color: #2D2520;
+}
+
+.stat__label {
+  font-size: 11px;
+  color: #B5A698;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ─── Recent Captures ─────────────────────────────────────── */
+
+.recent {
+  margin-bottom: 20px;
+}
+
+.recent__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #8B7E74;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.recent__list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.recent__item {
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #EDE8E1;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #6B5E54;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent__item-author {
+  font-weight: 600;
+  color: #2D2520;
+  margin-right: 6px;
+}
+
+.recent__empty {
+  text-align: center;
+  font-size: 12px;
+  color: #B5A698;
+  padding: 16px 0;
+}
+
+/* ─── Profile Capture ─────────────────────────────────────── */
+
+.profile-capture {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #E8E2DA;
+}
+
+.profile-capture__status {
+  font-size: 12px;
+  text-align: center;
+  padding: 6px 0 0;
+  min-height: 20px;
+}
+
+.profile-capture__status--success {
+  color: #6B9E7D;
+}
+
+.profile-capture__status--error {
+  color: #D4695A;
+}
+
+.btn--accent {
+  background: #E8664A;
+  color: #fff;
+}
+
+.btn--accent:hover:not(:disabled) {
+  background: #D4563C;
+}
+
+/* ─── Settings ────────────────────────────────────────────── */
+
+.settings {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #E8E2DA;
+}
+
+.settings__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #8B7E74;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle input {
+  display: none;
+}
+
+.toggle__slider {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: #E8E2DA;
+  border-radius: 10px;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.toggle__slider::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s, background 0.2s;
+  box-shadow: 0 1px 3px rgba(45,37,32,0.15);
+}
+
+.toggle input:checked + .toggle__slider {
+  background: #E8664A;
+}
+
+.toggle input:checked + .toggle__slider::after {
+  transform: translateX(16px);
+  background: #fff;
+}
+
+.toggle__label {
+  font-size: 13px;
+  color: #2D2520;
+}
+
+.toggle__hint {
+  font-size: 11px;
+  color: #B5A698;
+  margin-top: 6px;
+  margin-left: 46px;
+}
+
+/* ─── Actions ─────────────────────────────────────────────── */
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

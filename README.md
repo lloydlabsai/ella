@@ -36,6 +36,24 @@ npm run dev
 - **Generation**: Anthropic Claude with web search
 - **Validation (Pro)**: Tavily Search + Perplexity AI
 
+## Chrome Extension
+
+Ella includes a Chrome extension for one-click capture directly from LinkedIn. Instead of screenshotting and uploading manually, click "Capture" on any post in your feed.
+
+### Install (dev mode)
+
+1. Go to `chrome://extensions`
+2. Enable **Developer mode** (top right)
+3. Click **Load unpacked** → select the `chrome-extension/` folder
+4. Log in via the extension popup with your Ella credentials
+5. Browse LinkedIn — capture buttons appear on every post
+
+### How it works
+
+- **DOM extraction** reads post data directly from LinkedIn's page (fast, free, no API call)
+- **Screenshot capture** takes a visual snapshot for your records (supports scroll-stitching for long posts)
+- **Vision fallback** — if LinkedIn changes their markup and DOM extraction fails, the screenshot is automatically sent to Claude Vision for extraction
+
 ## Project Structure
 
 ```
@@ -46,6 +64,12 @@ npm run dev
 │   ├── hooks/               # useAuth, usePosts, useMLAnalysis
 │   ├── components/          # UI components
 │   └── pages/               # Capture, Database, Analyze, Generate, Settings
+├── chrome-extension/        # Manifest V3 Chrome extension
+│   ├── manifest.json        # Extension config + permissions
+│   ├── content.js           # LinkedIn DOM extraction + button injection
+│   ├── background.js        # Screenshot capture + Supabase communication
+│   ├── popup.html/js/css    # Login + capture dashboard
+│   └── content.css          # Injected button/toast styles
 ├── supabase/migrations/     # Database schema
 ├── CLAUDE.md                # Full project context for Claude Code
 └── package.json

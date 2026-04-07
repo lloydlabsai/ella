@@ -30,17 +30,19 @@ async function getHeaders(mode) {
   return headers;
 }
 
-export async function callClaude(systemPrompt, userMessage, { useWebSearch = false } = {}) {
+export async function callClaude(systemPrompt, userMessage, { useWebSearch = false, model = null } = {}) {
   const { url, mode } = getEndpoint();
   const body = {
-    model: MODEL, max_tokens: 1500, system: systemPrompt,
+    model: model || MODEL, max_tokens: model === "claude-opus-4-6" ? 4000 : 1500, system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
   };
   if (useWebSearch) body.tools = [{ type: "web_search_20250305", name: "web_search" }];
   const res = await fetch(url, { method: "POST", headers: await getHeaders(mode), body: JSON.stringify(body) });
   const data = await res.json();
   if (data.error) throw new Error(data.error.message || "API error");
-  return data.content.filter((b) => b.type === "text").map((b) => b.text).join("\n");
+  const text = data.content.filter((b) => b.type === "text").map((b) => b.text).join("\n");
+  // Strip citation tags and other HTML/XML markup from web search responses
+  return text.replace(/<[^>]*>/g, "").trim();
 }
 
 export async function extractFromScreenshot(base64Image, mediaType = "image/png") {

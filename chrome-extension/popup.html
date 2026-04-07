@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=400">
+  <link rel="stylesheet" href="popup.css">
+  <title>Ella</title>
+</head>
+<body>
+  <div class="popup">
+    <header class="header">
+      <img src="icons/icon128.png" alt="Ella" class="header__logo">
+      <h1 class="header__title">Ella</h1>
+      <p class="header__subtitle">Ella learns what works in your industry, then helps you write your own.</p>
+    </header>
+
+    <!-- Login view -->
+    <div id="login-view" class="view" style="display: none;">
+      <form id="login-form" class="form">
+        <input type="email" id="email" class="input" placeholder="Email" required autocomplete="email">
+        <input type="password" id="password" class="input" placeholder="Password" required autocomplete="current-password">
+        <button type="submit" id="login-btn" class="btn btn--primary">Log in</button>
+        <button type="button" id="signup-btn" class="btn btn--secondary">Sign up</button>
+        <p id="auth-error" class="error" style="display: none;"></p>
+      </form>
+    </div>
+
+    <!-- Dashboard view -->
+    <div id="dashboard-view" class="view" style="display: none;">
+      <div class="progress" id="progress-section">
+        <div class="progress__bar-wrap">
+          <div class="progress__bar" id="progress-bar" style="width: 0%"></div>
+        </div>
+        <p class="progress__text" id="progress-text">0/10 posts captured — Ella gets smarter with each one</p>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <span class="stat__value" id="capture-count">—</span>
+          <span class="stat__label">Posts captured</span>
+        </div>
+      </div>
+
+      <div class="recent">
+        <h3 class="recent__title">Recent captures</h3>
+        <ul id="recent-list" class="recent__list">
+          <li class="recent__empty">No captures yet</li>
+        </ul>
+      </div>
+
+      <div class="profile-capture">
+        <div id="profile-captured-info" style="display: none; margin-bottom: 8px;">
+          <p style="font-size: 12px; color: #6B9E7D; margin-bottom: 2px;" id="profile-captured-name"></p>
+          <p style="font-size: 11px; color: #8B7E74;" id="profile-captured-headline"></p>
+        </div>
+        <div id="profile-not-captured" style="display: none; margin-bottom: 8px;">
+          <p style="font-size: 11px; color: #D4695A;">No profile captured yet. Visit your LinkedIn profile and click below.</p>
+        </div>
+        <button id="capture-profile-btn" class="btn btn--accent">Capture My LinkedIn Profile</button>
+        <p id="profile-status" class="profile-capture__status"></p>
+        <p class="toggle__hint">Go to your LinkedIn profile page, then click to capture your background for post generation</p>
+      </div>
+
+      <div class="settings">
+        <h3 class="settings__title">Settings</h3>
+        <label class="toggle">
+          <input type="checkbox" id="capture-comments-toggle">
+          <span class="toggle__slider"></span>
+          <span class="toggle__label">Capture comments</span>
+        </label>
+        <p class="toggle__hint">Auto-expand and extract comments when capturing</p>
+        <label class="toggle" style="margin-top: 8px;">
+          <span class="toggle__label">Highlight posts with</span>
+          <input type="number" id="hot-threshold" class="input" style="width: 60px; padding: 4px 8px; margin: 0 6px; text-align: center; font-size: 12px;" value="100" min="10" max="10000">
+          <span class="toggle__label">+ reactions</span>
+        </label>
+      </div>
+
+      <div class="settings" style="margin-top: 0;">
+        <h3 class="settings__title">Power Tools</h3>
+        <button id="bulk-capture-btn" class="btn btn--secondary" style="font-size: 12px; padding: 8px;">Quick Capture All Visible Posts</button>
+        <p class="toggle__hint">Grabs preview data only (no comments/screenshots). Best for building initial database fast.</p>
+      </div>
+
+      <div class="actions">
+        <a id="open-app" class="btn btn--primary" href="https://getella.io" target="_blank" rel="noopener">
+          Open Ella
+        </a>
+        <button id="logout-btn" class="btn btn--secondary">Log out</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

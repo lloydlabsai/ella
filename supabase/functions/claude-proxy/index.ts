@@ -35,9 +35,12 @@ serve(async (req) => {
 
     const body = await req.json();
 
-    // Enforce model and max_tokens limits
-    body.model = body.model || "claude-sonnet-4-20250514";
-    body.max_tokens = Math.min(body.max_tokens || 1500, 4000);
+    // Enforce model allowlist and max_tokens limits
+    const ALLOWED_MODELS = ["claude-sonnet-4-20250514", "claude-opus-4-6"];
+    if (!ALLOWED_MODELS.includes(body.model)) {
+      body.model = "claude-sonnet-4-20250514";
+    }
+    body.max_tokens = Math.min(body.max_tokens || 1500, 8000);
 
     const response = await fetch(ANTHROPIC_URL, {
       method: "POST",

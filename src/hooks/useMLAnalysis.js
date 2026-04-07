@@ -8,8 +8,8 @@ export function useMLAnalysis(userId) {
 
   const analyze = useCallback(
     async (posts) => {
-      if (!posts.length || posts.length < 3) {
-        throw new Error("Need at least 3 posts for ML analysis");
+      if (!posts.length || posts.length < 5) {
+        throw new Error("Need at least 5 posts for ML analysis");
       }
       setAnalyzing(true);
       try {
