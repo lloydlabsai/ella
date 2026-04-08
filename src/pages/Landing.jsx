@@ -4,12 +4,10 @@ export default function Landing() {
   const navigate = useNavigate();
 
   const PAIN_POINTS = [
-    { title: "I know my stuff but I don't know what to post", desc: "You have years of expertise and zero idea how to turn it into a LinkedIn post. So you don't post. And your profile stays silent." },
-    { title: "I don't have time to be a content creator", desc: "Monitoring news, brainstorming hooks, structuring a post from scratch — it takes hours you don't have. So it never happens." },
-    { title: "Everything I write sounds like AI", desc: "You've tried ChatGPT. It came out polished, generic, and obviously not you. Your posts should show how you think, not how an AI writes." },
-    { title: "I don't know what actually works", desc: "Some posts get 12 reactions. Others get 500. You can't figure out the pattern. Every post feels like a coin flip." },
-    { title: "My LinkedIn looks dead", desc: "No recent posts tells recruiters, clients, and partners you're not engaged. Your profile is your first impression and right now it's a blank stare." },
-    { title: "I see great posts but can't decode them", desc: "You scroll past posts with 500 reactions and think 'how do they do that?' but there's no way to figure it out on your own." },
+    { label: "The Ghost Profile", title: "Your profile is a blank stare", desc: "You have years of expertise, but your LinkedIn is a ghost town. When recruiters or partners look for you, silence tells them you're out of the loop. Your digital reputation isn't matching your real-world authority." },
+    { label: "The Time Trap", title: "Content creation is a second job", desc: "Monitoring news and brainstorming hooks takes hours you don't have. You're running a career, not a media company. If a post takes more than 5 minutes to draft, it simply doesn't happen." },
+    { label: "The AI Vibe Check", title: "You sound like a bot", desc: "You've tried the generic AI tools. They're polished, bland, and obviously not you. Your network wants to hear how you think, not how an LLM summarizes." },
+    { label: "The Black Box Algorithm", title: "Posting feels like a coin flip", desc: "You scroll past posts with 500 reactions and wonder how they do that. Stop guessing. The patterns are there — you just can't see them yet." },
   ];
 
   const WHY_NOW = [
@@ -180,12 +178,13 @@ export default function Landing() {
           fontFamily: "'DM Serif Display', serif", fontSize: 36, fontWeight: 400,
           textAlign: "center", color: "#E8664A", marginBottom: 48,
         }}>Sound familiar?</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20, maxWidth: 800, margin: "0 auto" }}>
           {PAIN_POINTS.map((p, i) => (
             <div key={i} style={{
               background: "#EFEBE5", borderRadius: 16, padding: "28px 24px",
               borderLeft: "3px solid #E8664A",
             }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#E8664A", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>{p.label}</div>
               <div style={{ fontSize: 16, fontWeight: 700, color: "#2D2520", marginBottom: 8, lineHeight: 1.35 }}>{p.title}</div>
               <div style={{ fontSize: 13, color: "#8C7E72", lineHeight: 1.6 }}>{p.desc}</div>
             </div>
