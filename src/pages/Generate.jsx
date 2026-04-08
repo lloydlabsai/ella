@@ -245,9 +245,11 @@ export default function Generate({ profile, mlResults, postCount = 0, recentPost
       const pr = profile?.persona_research;
       const lc = profile?.linkedin_context;
       const vp = profile?.voice_profile;
+      const occupation = profile?.occupation || '';
       const personaParts = [];
       if (lc?.name) personaParts.push(`Name: ${lc.name}`);
-      if (lc?.headline) personaParts.push(`Role: ${lc.headline}`);
+      if (occupation) personaParts.push(`Occupation: ${occupation}`);
+      if (lc?.headline) personaParts.push(`LinkedIn headline: ${lc.headline}`);
       if (pr?.niche) personaParts.push(`Niche: ${pr.niche}`);
       if (pr?.company_context) personaParts.push(`Company: ${pr.company_context}`);
       if (pr?.competitive_landscape) personaParts.push(`Competitive landscape: ${pr.competitive_landscape}`);
@@ -263,29 +265,46 @@ export default function Generate({ profile, mlResults, postCount = 0, recentPost
       const captureTopics = recentPosts?.length > 0 ? recentPosts.slice(0, 4).map(p => p.post_text?.slice(0, 80)).filter(Boolean).join(' | ') : '';
       const personaBlock = personaParts.length > 0 ? `THIS PERSON'S WORLD:\n${personaParts.join('\n')}\n\n` : '';
 
+      const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      const cutoff = new Date(Date.now() - 60*24*60*60*1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
       const resp = await callClaude(
-        `Today is ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. You find specific, surprising things happening RIGHT NOW in 2026 that would make this particular person stop scrolling and think "I need to weigh in on this." You understand their niche, their competitive landscape, and what keeps them up at night. Search for the very latest 2026 news and data. Return ONLY valid JSON, no markdown fences.`,
-        `${personaBlock}${captureTopics ? `TOPICS THEY ENGAGE WITH: ${captureTopics}\n\n` : ''}TODAY'S DATE: ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}\n\nSearch for what's happening in ${industry} THIS WEEK in 2026. Find 6 things that this specific person — in their specific role, at their specific company, in their specific corner of ${industry} — would have a strong, informed opinion about.
+        `Today is ${today}. You find specific, surprising things that happened in the LAST 60 DAYS. ONLY return news from ${cutoff} or later. Nothing older. Search for the very latest news. Return ONLY valid JSON, no markdown fences.`,
+        `${personaBlock}${captureTopics ? `TOPICS THEY ENGAGE WITH: ${captureTopics}\n\n` : ''}TODAY'S DATE: ${today}
+CUTOFF: Nothing older than ${cutoff}. If you can't find enough items from the last 60 days, return fewer — never pad with old news.
+
+This person is ${occupation ? `a ${occupation}` : 'a professional'} in ${industry}. Find 6 topics specifically relevant to someone in THIS role.${occupation ? ` What would a ${occupation} specifically care about? Think about their day-to-day challenges, the decisions they make, the metrics they track, the tools they use, and the conversations they have with peers. NOT generic industry headlines — topics this specific person could write about with authority because they live it.` : ''}
 
 Rules:
-- Each headline must be a SPECIFIC EVENT or DATA POINT, not a topic area. Not "AI in retail" but "Target just cut 200 category management roles and replaced them with an AI tool from Relex Solutions"
-- Name real companies, real people, real numbers, real dates
-- Find the TENSION — where should smart people disagree? What just changed? What did everyone miss?
-- No evergreen advice. No "trends to watch." Only things that happened recently or data that just dropped.
-- 3 topics from their core niche using sources most people haven't seen: ${pr?.publications_they_read || 'trade publications, earnings calls, SEC filings, industry data releases'}. Skip anything already viral on LinkedIn.
-- 2 "discovery" topics from ADJACENT areas where this person's expertise gives them a unique angle others don't have.${pr?.discovery_topics ? ' Adjacent areas: ' + pr.discovery_topics : ''} These should feel like "I never thought to write about that but I actually know a lot about it."
-- 1 bigger news story with a non-obvious angle only this person would see
-${pr?.anti_topics ? '- NEVER suggest topics in these areas (outside their credibility): ' + pr.anti_topics : ''}
+- EVERY item must be from the last 60 days. Include the approximate date.
+- Each headline must be a SPECIFIC EVENT or DATA POINT with real companies, people, numbers, dates.
+- Find the TENSION — where should smart people in this role disagree?
+- No evergreen advice. No "trends to watch." Only things that actually happened.
+- Use sources most people haven't seen: ${pr?.publications_they_read || 'trade publications, earnings calls, SEC filings, industry data releases'}.
+- Every topic should pass this test: "Would a ${occupation || 'practitioner'} in ${industry} read this and immediately have a strong opinion based on their direct experience?"
+${pr?.anti_topics ? '- NEVER suggest topics in these areas: ' + pr.anti_topics : ''}
 
-Return a JSON array. Each item: {"headline":"the specific thing that happened — punchy and concrete","context":"2-3 sentences with numbers and why it matters","why":"the debate angle that would spark real comments"}
+Return a JSON array. Each item: {"headline":"the specific thing that happened","context":"2-3 sentences with numbers and why it matters","why":"the debate angle that would spark real comments"}
 
 JSON array only, 6 items.`,
         { useWebSearch: true }
       );
-      const cleaned = resp.replace(/```json\s?|```/g, "").trim();
-      // Extract JSON array even if there's text around it
-      const arrMatch = cleaned.match(/\[[\s\S]*\]/);
-      if (!arrMatch) throw new Error("No JSON array in response");
+      let cleaned = resp.replace(/```json\s?|```/g, "").trim();
+      let arrMatch = cleaned.match(/\[[\s\S]*\]/);
+      if (!arrMatch) {
+        console.warn("First ideas call didn't return JSON array, retrying with simpler prompt...");
+        const retry = await callClaude(
+          `Today is ${today}. Search for current ${industry} news from the last 60 days. Return ONLY a JSON array, no other text.`,
+          `Find 6 specific recent news events relevant to a ${occupation || 'professional'} in ${industry}. Return JSON array: [{"headline":"what happened","context":"2 sentences","why":"debate angle"}]`,
+          { useWebSearch: true }
+        );
+        cleaned = retry.replace(/```json\s?|```/g, "").trim();
+        arrMatch = cleaned.match(/\[[\s\S]*\]/);
+      }
+      if (!arrMatch) {
+        console.error("Ideas raw response:", cleaned.slice(0, 500));
+        throw new Error("Couldn't load topics — try again");
+      }
       const parsed = JSON.parse(arrMatch[0]);
       setIdeas(Array.isArray(parsed) ? parsed : []);
     } catch (err) {
@@ -302,6 +321,8 @@ JSON array only, 6 items.`,
     setScoreResult(null);
     open("landscape");
     fetchLandscape(topicText);
+    // Auto-scroll to landscape section
+    setTimeout(() => document.getElementById("landscape")?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
   };
 
   // ─── Landscape: Research ────────────────────────────────
@@ -310,7 +331,7 @@ JSON array only, 6 items.`,
     try {
       const resp = await callClaude(
         `Today is ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. You are a ${industry} research assistant. Search for current 2026 information about this topic. Return ONLY valid JSON, no markdown fences.`,
-        `Topic: "${topicText}"\n\nToday's date: ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. Search for the latest 2026 data, news, and perspectives on this topic in ${industry}. Prioritize data from 2025-2026. Return JSON:\n{"facts":["specific data point or stat with source",...6-8 items],"angles":["one sentence framing of a possible post angle",...3-4 items],"stakeholders":["affected role/group",...4-6 items]}\n\nEvery fact must include a specific number, company, or data point. JSON only.`,
+        `Topic: "${topicText}"\n\nToday's date: ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. Search for the latest 2025-2026 data, news, and perspectives on this topic in ${industry}. Return JSON:\n{"facts":["specific data point or stat with source",...5 items],"angles":["one sentence framing of a possible post angle",...6 items],"stakeholders":["affected role/group",...4-6 items]}\n\nEvery fact must include a specific number, company, or data point. JSON only.`,
         { useWebSearch: true }
       );
       const data = JSON.parse(resp.replace(/```json\s?|```/g, "").trim());
@@ -374,6 +395,8 @@ JSON array only, 6 items.`,
       const paragraphs = cleaned.split(/\n\n+/).filter((p) => p.trim());
       setBlocks(paragraphs.map((text, i) => ({ id: `b-${Date.now()}-${i}`, text: text.trim() })));
       recordGeneration();
+      open("draft");
+      open("visual");
       open("check");
 
       // Auto-score
@@ -574,7 +597,7 @@ Do NOT add em dashes (—), emoji, single-sentence dramatic lines, or formal con
       {/* ─── SECTION 1: SPARK ─────────────────────────────── */}
       <Section id="spark" title="What caught your eye?" expanded={expanded.spark} onToggle={() => toggle("spark")}>
         <div style={{ display: "flex", gap: 6, marginBottom: 16, marginTop: 12 }}>
-          {[["ideas", "Ella's Picks"], ["custom", "Your Spark"], ["captures", "From Captures"]].map(([id, label]) => (
+          {[["ideas", "Ella's Picks"], ["custom", "Your Spark"]].map(([id, label]) => (
             <button key={id} onClick={() => setSparkTab(id)} style={{
               padding: "6px 14px", borderRadius: 16, border: `1.5px solid ${sparkTab === id ? "#E8664A" : "#E8E2DA"}`,
               background: sparkTab === id ? "rgba(232,102,74,0.08)" : "#fff",
@@ -596,18 +619,35 @@ Do NOT add em dashes (—), emoji, single-sentence dramatic lines, or formal con
               fontSize: 13, fontWeight: 600, cursor: loadingIdeas ? "wait" : "pointer", marginBottom: 12,
             }}>{loadingIdeas ? "Searching..." : `What's happening in ${industry}?`}</button>
             )}
-            {industry && ideas.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {ideas.map((idea, i) => (
-                  <button key={i} onClick={() => selectTopic(idea.headline || idea)} style={{
-                    textAlign: "left", padding: "12px 16px", background: "#F7F3EE", border: "1px solid #EDE8E1",
-                    borderRadius: 10, cursor: "pointer", transition: "border-color 0.15s",
-                  }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#2D2520", marginBottom: 4 }}>{idea.headline || idea}</div>
-                    {idea.context && <div style={{ fontSize: 11, color: "#5C534A", lineHeight: 1.5 }}>{idea.context}</div>}
-                    {idea.why && <div style={{ fontSize: 10, color: "#B5A698", marginTop: 4 }}>{idea.why}</div>}
-                  </button>
-                ))}
+            {loadingIdeas && (
+              <div style={{ textAlign: "center", padding: "24px 0" }}>
+                <div style={{
+                  width: 28, height: 28, border: "3px solid #EDE8E1", borderTopColor: "#E8664A",
+                  borderRadius: "50%", animation: "spin 0.8s linear infinite",
+                  margin: "0 auto 10px",
+                }} />
+                <div style={{ fontSize: 13, color: "#8B7E74" }}>Ella is searching for what's happening in {industry}...</div>
+                <div style={{ fontSize: 11, color: "#B5A698", marginTop: 4 }}>This usually takes 10-15 seconds</div>
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+              </div>
+            )}
+            {industry && !loadingIdeas && ideas.length > 0 && (
+              <div>
+                <div style={{ fontSize: 12, color: "#E8664A", fontWeight: 600, marginBottom: 12 }}>
+                  Pick a topic to get started — Ella will research it for you
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {ideas.map((idea, i) => (
+                    <button key={i} onClick={() => selectTopic(idea.headline || String(idea))} style={{
+                      textAlign: "left", padding: "12px 16px", background: "#F7F3EE", border: "1px solid #EDE8E1",
+                      borderRadius: 10, cursor: "pointer", transition: "border-color 0.15s", width: "100%",
+                    }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#2D2520", marginBottom: 4 }}>{idea.headline || String(idea)}</div>
+                      {idea.context && <div style={{ fontSize: 11, color: "#5C534A", lineHeight: 1.5 }}>{idea.context}</div>}
+                      {idea.why && <div style={{ fontSize: 10, color: "#B5A698", marginTop: 4 }}>{idea.why}</div>}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -656,16 +696,34 @@ Do NOT add em dashes (—), emoji, single-sentence dramatic lines, or formal con
       <Section id="landscape" title="Here's what Ella found" subtitle={loadingLandscape ? "Searching..." : facts.length ? `${facts.length} facts, ${angles.length} angles` : ""}
         expanded={expanded.landscape} onToggle={() => toggle("landscape")}>
 
-        {loadingLandscape && <div style={{ padding: "20px 0", textAlign: "center", color: "#E8664A", fontSize: 13, fontWeight: 600 }}>Researching...</div>}
+        {loadingLandscape && (
+          <div style={{ textAlign: "center", padding: "24px 0" }}>
+            <div style={{
+              width: 28, height: 28, border: "3px solid #EDE8E1", borderTopColor: "#E8664A",
+              borderRadius: "50%", animation: "spin 0.8s linear infinite",
+              margin: "0 auto 10px",
+            }} />
+            <div style={{ fontSize: 13, color: "#8B7E74" }}>Ella is researching this topic...</div>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </div>
+        )}
 
         {facts.length > 0 && (
           <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 8 }}>Key Facts <span style={{ fontWeight: 400 }}>(toggle off what doesn't matter)</span></div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 4 }}>Key Facts</div>
+            <div style={{ fontSize: 11, color: "#8B7E74", marginBottom: 10 }}>Click to toggle off facts you don't want in your post. Enabled facts will be used as evidence.</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {facts.map((f, i) => (
-                <Pill key={i} active={f.enabled} onClick={() => setFacts((fs) => fs.map((ff, j) => j === i ? { ...ff, enabled: !ff.enabled } : ff))}>
-                  {f.enabled ? "☑" : "☐"} {f.text.slice(0, 80)}{f.text.length > 80 ? "..." : ""}
-                </Pill>
+                <button key={i} onClick={() => setFacts((fs) => fs.map((ff, j) => j === i ? { ...ff, enabled: !ff.enabled } : ff))}
+                  style={{
+                    display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px",
+                    background: f.enabled ? "#F7F3EE" : "#fff", border: `1.5px solid ${f.enabled ? "#E8664A33" : "#EDE8E1"}`,
+                    borderRadius: 10, cursor: "pointer", textAlign: "left", width: "100%",
+                    opacity: f.enabled ? 1 : 0.5, transition: "all 0.15s",
+                  }}>
+                  <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{f.enabled ? "✓" : "○"}</span>
+                  <span style={{ fontSize: 12, color: "#2D2520", lineHeight: 1.5 }}>{f.text}</span>
+                </button>
               ))}
             </div>
           </div>
@@ -673,7 +731,8 @@ Do NOT add em dashes (—), emoji, single-sentence dramatic lines, or formal con
 
         {angles.length > 0 && (
           <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 8 }}>Angles</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 4 }}>Angles</div>
+            <div style={{ fontSize: 11, color: "#8B7E74", marginBottom: 8 }}>Pick the angle you want to take. This frames how your post approaches the topic.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {angles.map((a, i) => (
                 <AngleCard key={i} text={a.text} selected={a.selected}
@@ -743,13 +802,28 @@ Do NOT add em dashes (—), emoji, single-sentence dramatic lines, or formal con
       {/* ─── SECTION 4: DRAFT ─────────────────────────────── */}
       <Section id="draft" title="Ella's draft" subtitle={blocks.length ? `${fullDraftText.length} characters` : ""}
         expanded={expanded.draft} onToggle={() => toggle("draft")}
-        badge={canGenerate && blocks.length === 0 ? <button onClick={generateDraft} disabled={loadingDraft} style={{
-          padding: "6px 14px", borderRadius: 16, border: "none", background: loadingDraft ? "#E8E2DA" : "#E8664A",
-          color: loadingDraft ? "#B5A698" : "#fff", fontSize: 12, fontWeight: 600, cursor: loadingDraft ? "wait" : "pointer",
+        badge={blocks.length === 0 ? <button onClick={() => {
+          if (!topic) { alert("Pick a topic first from Ella's Picks or type your own."); open("spark"); return; }
+          if (!canGenerate) { alert("You've used all your generations this month."); return; }
+          generateDraft();
+        }} disabled={loadingDraft} style={{
+          padding: "6px 14px", borderRadius: 16, border: "none", background: loadingDraft ? "#E8E2DA" : !topic ? "#E8E2DA" : "#E8664A",
+          color: loadingDraft ? "#B5A698" : !topic ? "#B5A698" : "#fff", fontSize: 12, fontWeight: 600, cursor: loadingDraft ? "wait" : "pointer",
         }}>{loadingDraft ? "Writing..." : "Write it"}</button> : null}>
 
         <div ref={draftRef} style={{ marginTop: 12 }}>
-          {loadingDraft && <div style={{ textAlign: "center", padding: "30px 0", color: "#E8664A", fontSize: 14, fontWeight: 600 }}>Writing your draft...</div>}
+          {loadingDraft && (
+            <div style={{ textAlign: "center", padding: "30px 0" }}>
+              <div style={{
+                width: 28, height: 28, border: "3px solid #EDE8E1", borderTopColor: "#E8664A",
+                borderRadius: "50%", animation: "spin 0.8s linear infinite",
+                margin: "0 auto 10px",
+              }} />
+              <div style={{ color: "#E8664A", fontSize: 14, fontWeight: 600 }}>Ella is writing your draft...</div>
+              <div style={{ fontSize: 11, color: "#B5A698", marginTop: 4 }}>Using your voice, your take, and real-time research</div>
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            </div>
+          )}
 
           {blocks.length > 0 && (
             <div>
@@ -793,8 +867,15 @@ Do NOT add em dashes (—), emoji, single-sentence dramatic lines, or formal con
                 </div>
               ))}
 
+              {/* ── Editing Guide ── */}
+              <div style={{ marginTop: 12, padding: "10px 14px", background: "rgba(232,102,74,0.04)", borderRadius: 8, border: "1px solid rgba(232,102,74,0.1)" }}>
+                <div style={{ fontSize: 11, color: "#8B7E74", lineHeight: 1.6 }}>
+                  <strong style={{ color: "#2D2520" }}>Edit your draft:</strong> Hover any paragraph for controls — Edit, Sharpen (AI tightens it), reorder, or remove. Use the box below to tell Ella what to change across the whole post.
+                </div>
+              </div>
+
               {/* ── Conversational Refinement ── */}
-              <div style={{ marginTop: 16, padding: "14px 16px", background: "#F7F3EE", borderRadius: 10 }}>
+              <div style={{ marginTop: 12, padding: "14px 16px", background: "#F7F3EE", borderRadius: 10 }}>
                 {refineHistory.length > 0 && (
                   <div style={{ marginBottom: 10, maxHeight: 120, overflowY: "auto" }}>
                     {refineHistory.map((h, i) => (
@@ -982,7 +1063,7 @@ Do NOT add em dashes (—), emoji, single-sentence dramatic lines, or formal con
 
       {/* ─── SECTION 6: FINAL CHECK ───────────────────────── */}
       {blocks.length > 0 && (
-        <Section id="check" title="Ready?" expanded={expanded.check} onToggle={() => toggle("check")}
+        <Section id="check" title="Final check" subtitle="Review before you post" expanded={expanded.check} onToggle={() => toggle("check")}
           badge={scoreResult ? <span style={{
             fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 12,
             color: scoreResult.score >= 75 ? "#6B9E7D" : scoreResult.score >= 50 ? "#D4A853" : "#D4695A",
@@ -1003,25 +1084,35 @@ Do NOT add em dashes (—), emoji, single-sentence dramatic lines, or formal con
             )}
 
             {/* Hashtag toggles */}
-            {hashtags.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 6 }}>Hashtags</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                  {hashtags.map((h, i) => (
-                    <Pill key={i} active={h.enabled} onClick={() => setHashtags((hs) => hs.map((hh, j) => j === i ? { ...hh, enabled: !hh.enabled } : hh))}>
-                      {h.tag}
-                    </Pill>
-                  ))}
-                </div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 4 }}>Hashtags</div>
+              <div style={{ fontSize: 11, color: "#8B7E74", marginBottom: 8 }}>Click to toggle on/off. 3-5 hashtags is optimal for LinkedIn reach.</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 8 }}>
+                {hashtags.map((h, i) => (
+                  <Pill key={i} active={h.enabled} onClick={() => setHashtags((hs) => hs.map((hh, j) => j === i ? { ...hh, enabled: !hh.enabled } : hh))}>
+                    {h.tag}
+                  </Pill>
+                ))}
               </div>
-            )}
+              <input
+                placeholder="Add a hashtag (e.g. #CPG)"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && e.target.value.trim()) {
+                    const tag = e.target.value.trim().startsWith("#") ? e.target.value.trim() : "#" + e.target.value.trim();
+                    setHashtags(prev => [...prev, { tag, enabled: true }]);
+                    e.target.value = "";
+                  }
+                }}
+                style={{ padding: "6px 10px", border: "1px dashed #E8E2DA", borderRadius: 8, fontSize: 11, color: "#2D2520", outline: "none", background: "#fff", width: 160 }}
+              />
+            </div>
 
             {/* Visual readiness */}
             <div style={{ fontSize: 12, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
               {visualDirection ? (
                 <span style={{ color: "#6B9E7D" }}>{VISUAL_DIRECTIONS[visualDirection]?.icon} Visual: {VISUAL_DIRECTIONS[visualDirection]?.label} — create your graphic before posting</span>
               ) : (
-                <span style={{ color: "#D4A853" }}>No visual selected — image posts get 40% more engagement. <button onClick={() => { open("visual"); }} style={{ background: "none", border: "none", color: "#E8664A", cursor: "pointer", fontSize: 12, fontWeight: 600, textDecoration: "underline", padding: 0 }}>Add one?</button></span>
+                <span style={{ color: "#D4A853" }}>No visual selected — image posts get 40% more engagement. <button onClick={() => { open("visual"); setTimeout(() => document.getElementById("visual")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100); }} style={{ background: "none", border: "none", color: "#E8664A", cursor: "pointer", fontSize: 12, fontWeight: 600, textDecoration: "underline", padding: 0 }}>Add one?</button></span>
               )}
             </div>
 

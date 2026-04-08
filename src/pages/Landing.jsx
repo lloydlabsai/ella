@@ -3,20 +3,35 @@ import { useNavigate } from "react-router-dom";
 export default function Landing() {
   const navigate = useNavigate();
 
+  const PAIN_POINTS = [
+    { title: "I know my stuff but I don't know what to post", desc: "You have years of expertise and zero idea how to turn it into a LinkedIn post. So you don't post. And your profile stays silent." },
+    { title: "I don't have time to be a content creator", desc: "Monitoring news, brainstorming hooks, structuring a post from scratch — it takes hours you don't have. So it never happens." },
+    { title: "Everything I write sounds like AI", desc: "You've tried ChatGPT. It came out polished, generic, and obviously not you. Your posts should show how you think, not how an AI writes." },
+    { title: "I don't know what actually works", desc: "Some posts get 12 reactions. Others get 500. You can't figure out the pattern. Every post feels like a coin flip." },
+    { title: "My LinkedIn looks dead", desc: "No recent posts tells recruiters, clients, and partners you're not engaged. Your profile is your first impression and right now it's a blank stare." },
+    { title: "I see great posts but can't decode them", desc: "You scroll past posts with 500 reactions and think 'how do they do that?' but there's no way to figure it out on your own." },
+  ];
+
+  const WHY_NOW = [
+    { title: "Your profile is your first impression", desc: "Recruiters, clients, and partners check your LinkedIn before your website. Thoughtful posts show something a resume can't: how you think and whether you're paying attention." },
+    { title: "Visibility creates opportunity", desc: "The people getting inbound calls, speaking invitations, and partnership offers aren't the most qualified. They're the most visible." },
+    { title: "Your expertise is going to waste", desc: "You have years of pattern recognition and professional judgment. If it stays in your head, it's not working for you." },
+  ];
+
   const STEPS = [
-    { num: "01", title: "Capture", desc: "Screenshot high-performing LinkedIn posts from your industry via Chrome extension or upload" },
-    { num: "02", title: "Analyze", desc: "ML discovers what actually drives engagement — hooks, structure, vocabulary, CTAs" },
-    { num: "03", title: "Create", desc: "AI agents draft posts using your patterns, trending topics, and brand voice" },
-    { num: "04", title: "Validate", desc: "Fact-check every claim with live sources before you publish" },
+    { num: "01", title: "Spark", desc: "Tell Ella what caught your eye — a news story, a trend, or an opinion. Or let Ella surface what's trending in your industry." },
+    { num: "02", title: "Research", desc: "Ella finds the facts, angles, and data. You pick what matters and dismiss what doesn't." },
+    { num: "03", title: "Your Take", desc: "Add the insight only you have. One sentence of your perspective shapes the entire post." },
+    { num: "04", title: "Draft & Polish", desc: "Ella writes a draft using your voice and real-time research. Edit, sharpen, and post with confidence." },
   ];
 
   const FEATURES = [
-    { title: "Any Industry", desc: "SaaS, healthcare, fintech, real estate, CPG — Ella learns your niche's language", icon: "industry" },
-    { title: "Real ML, Not Guessing", desc: "TF-IDF, Pearson correlation, n-gram discovery on your actual engagement data", icon: "ml" },
-    { title: "Instant Value", desc: "Generate posts on day one. ML makes them better as you capture more", icon: "instant" },
-    { title: "Your Voice", desc: "Configure brand voice, writing style, and product mentions that feel natural", icon: "voice" },
-    { title: "Fact Validation", desc: "Tavily + Perplexity verify every claim and inject real-time data", icon: "validate", pro: true },
-    { title: "Private by Default", desc: "Your posts, your patterns, your data. Row-level security on everything", icon: "private" },
+    { title: "Any Industry", desc: "CPG, SaaS, healthcare, fintech, real estate — Ella researches and writes for your specific niche.", icon: "industry" },
+    { title: "Learns What Works", desc: "As you use Ella, she learns what resonates in your niche — which hooks, vocabulary, and structures drive engagement.", icon: "ml" },
+    { title: "Instant Value", desc: "Generate posts on day one. No setup required. Ella gets sharper as you use it.", icon: "instant" },
+    { title: "Your Voice", desc: "Tell Ella how you think and communicate. Drafts sound like you, not like AI.", icon: "voice" },
+    { title: "Post Scorer", desc: "Paste any draft and get an instant scorecard — hook strength, structure, readability, algorithm fit. Free and unlimited.", icon: "validate" },
+    { title: "Private by Default", desc: "Your posts, your patterns, your data. Row-level security on everything.", icon: "private" },
   ];
 
   const featureIcons = {
@@ -42,7 +57,7 @@ export default function Landing() {
     ),
     validate: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B5A698" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
       </svg>
     ),
     private: (
@@ -61,26 +76,9 @@ export default function Landing() {
         maxWidth: 1120, margin: "0 auto", padding: "20px 32px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
-            <img src="/ella-parrot.png" alt="Ella" style={{ width: 32, height: 32, objectFit: "contain" }} />
-          </div>
-          <div style={{ display: "flex", gap: 24 }}>
-            {["Product", "Features", "Pricing"].map(label => (
-              <button key={label} onClick={() => {
-                const id = label.toLowerCase();
-                document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
-              }} style={{
-                background: "none", border: "none", color: "#6B5E54", fontSize: 14,
-                fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
-              }}>{label}</button>
-            ))}
-            <button onClick={() => navigate("/signup")} style={{
-              background: "none", border: "1.5px solid #D4CFC7", color: "#6B5E54",
-              fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-              padding: "6px 16px", borderRadius: 20,
-            }}>Book a Demo</button>
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+          <img src="/ella-parrot.png" alt="Ella" style={{ width: 32, height: 32, objectFit: "contain" }} />
+          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 20, fontWeight: 400, color: "#2D2520" }}>Ella</span>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -106,11 +104,10 @@ export default function Landing() {
             fontFamily: "'DM Serif Display', serif", fontSize: 52, fontWeight: 400,
             lineHeight: 1.12, color: "#2D2520", marginBottom: 20, letterSpacing: "-0.5px",
           }}>
-            Ella learns what works.<br />Then helps you write it.
+            You know your industry.<br />Now post like it.
           </h1>
-          <p style={{ fontSize: 16, color: "#8C7E72", lineHeight: 1.7, maxWidth: 440, marginBottom: 36 }}>
-            Capture high-performing LinkedIn posts from your industry. Ella discovers
-            the patterns behind engagement, then drafts posts that use them.
+          <p style={{ fontSize: 16, color: "#8C7E72", lineHeight: 1.7, maxWidth: 480, marginBottom: 36 }}>
+            Ella turns your expertise into LinkedIn posts that build credibility and attract the right opportunities. No ghostwriter. No templates. Just a smarter way to show the world how you think.
           </p>
           <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
             <button onClick={() => navigate("/signup")} style={{
@@ -118,19 +115,19 @@ export default function Landing() {
               background: "#E8664A", color: "#fff", fontSize: 15, fontWeight: 700,
               cursor: "pointer", fontFamily: "inherit",
               boxShadow: "0 2px 12px rgba(232,102,74,0.25)",
-            }}>Try Free</button>
-            <button onClick={() => document.getElementById("product")?.scrollIntoView({ behavior: "smooth" })} style={{
-              padding: "14px 28px", border: "1.5px solid #D4CFC7", borderRadius: 24,
-              background: "transparent", color: "#6B5E54", fontSize: 15, fontWeight: 600,
-              cursor: "pointer", fontFamily: "inherit",
-            }}>Explore Features</button>
+            }}>Get Started Free</button>
+            <button onClick={() => document.getElementById("how")?.scrollIntoView({ behavior: "smooth" })} style={{
+              padding: "14px 28px", background: "transparent", border: "none", borderRadius: 24,
+              color: "#8C7E72", fontSize: 15, fontWeight: 500,
+              cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 3,
+            }}>See how it works</button>
           </div>
+          <p style={{ fontSize: 12, color: "#B5A698", marginTop: 16 }}>3 free posts per month. No credit card required.</p>
         </div>
 
         {/* Parrot illustration mosaic */}
         <div style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
           <div style={{ position: "relative", width: 400, height: 400 }}>
-            {/* Decorative grid tiles behind the parrot */}
             <div style={{
               position: "absolute", inset: 0,
               display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gridTemplateRows: "repeat(3, 1fr)",
@@ -153,16 +150,20 @@ export default function Landing() {
                 }} />
               ))}
             </div>
-            {/* Decorative shapes */}
+            {/* Coral glow behind parrot */}
+            <div style={{
+              position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+              width: 280, height: 280, borderRadius: "50%",
+              background: "radial-gradient(circle, rgba(232,102,74,0.1) 0%, rgba(232,102,74,0) 70%)",
+            }} />
             <div style={{
               position: "absolute", top: 30, right: 20, width: 80, height: 80,
-              borderRadius: "50%", background: "rgba(232,102,74,0.08)",
+              borderRadius: "50%", background: "rgba(232,102,74,0.1)",
             }} />
             <div style={{
               position: "absolute", bottom: 50, left: 15, width: 60, height: 60,
-              borderRadius: "50%", background: "rgba(232,102,74,0.06)",
+              borderRadius: "50%", background: "rgba(232,102,74,0.08)",
             }} />
-            {/* Parrot logo centered */}
             <img src="/ella-parrot.png" alt="Ella" style={{
               position: "absolute", top: "50%", left: "50%",
               transform: "translate(-50%, -50%)",
@@ -173,10 +174,48 @@ export default function Landing() {
         </div>
       </div>
 
+      {/* ─── Pain Points ─── */}
+      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "60px 32px 80px" }}>
+        <h2 style={{
+          fontFamily: "'DM Serif Display', serif", fontSize: 36, fontWeight: 400,
+          textAlign: "center", color: "#E8664A", marginBottom: 48,
+        }}>Sound familiar?</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+          {PAIN_POINTS.map((p, i) => (
+            <div key={i} style={{
+              background: "#EFEBE5", borderRadius: 16, padding: "28px 24px",
+              borderLeft: "3px solid #E8664A",
+            }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#2D2520", marginBottom: 8, lineHeight: 1.35 }}>{p.title}</div>
+              <div style={{ fontSize: 13, color: "#8C7E72", lineHeight: 1.6 }}>{p.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ─── LinkedIn isn't optional ─── */}
+      <div style={{ background: "#EFEBE5", padding: "80px 32px" }}>
+        <div style={{ maxWidth: 1120, margin: "0 auto" }}>
+          <div style={{ width: 40, height: 3, background: "#E8664A", borderRadius: 2, margin: "0 auto 24px" }} />
+          <h2 style={{
+            fontFamily: "'DM Serif Display', serif", fontSize: 36, fontWeight: 400,
+            textAlign: "center", color: "#E8664A", marginBottom: 48,
+          }}>LinkedIn isn't optional anymore</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+            {WHY_NOW.map((w, i) => (
+              <div key={i} style={{
+                background: "#F7F3EE", borderRadius: 16, padding: "28px 24px",
+              }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#2D2520", marginBottom: 8, lineHeight: 1.35 }}>{w.title}</div>
+                <div style={{ fontSize: 13, color: "#8C7E72", lineHeight: 1.6 }}>{w.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* ─── How It Works ─── */}
-      <div id="product" style={{
-        background: "#EFEBE5", padding: "80px 32px",
-      }}>
+      <div id="how" style={{ padding: "80px 32px" }}>
         <div style={{ maxWidth: 1120, margin: "0 auto" }}>
           <p style={{
             fontSize: 12, fontWeight: 700, color: "#E8664A", textTransform: "uppercase",
@@ -185,13 +224,13 @@ export default function Landing() {
           <h2 style={{
             fontFamily: "'DM Serif Display', serif", fontSize: 36, fontWeight: 400,
             textAlign: "center", color: "#2D2520", marginBottom: 56,
-          }}>From capture to publish in four steps</h2>
+          }}>From blank page to posted in minutes</h2>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 28 }}>
             {STEPS.map((step, i) => (
               <div key={i} style={{
-                background: "#F7F3EE", borderRadius: 16, padding: "28px 24px",
-                position: "relative",
+                background: "#EFEBE5", borderRadius: 16, padding: "28px 24px",
+                position: "relative", borderTop: "3px solid #E8664A",
               }}>
                 <div style={{
                   fontSize: 11, fontWeight: 700, color: "#E8664A", letterSpacing: 1,
@@ -215,8 +254,58 @@ export default function Landing() {
         </div>
       </div>
 
+      {/* ─── Setup ─── */}
+      <div style={{ padding: "80px 32px" }}>
+        <div style={{ maxWidth: 1120, margin: "0 auto" }}>
+          <p style={{
+            fontSize: 12, fontWeight: 700, color: "#E8664A", textTransform: "uppercase",
+            letterSpacing: 2.5, textAlign: "center", marginBottom: 12,
+          }}>Get Started</p>
+          <h2 style={{
+            fontFamily: "'DM Serif Display', serif", fontSize: 36, fontWeight: 400,
+            textAlign: "center", color: "#2D2520", marginBottom: 56,
+          }}>Set up in 2 minutes</h2>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 28 }}>
+            <div style={{
+              background: "#EFEBE5", borderRadius: 16, padding: "28px 24px",
+              borderTop: "3px solid #E8664A",
+            }}>
+              <div style={{
+                fontSize: 17, fontWeight: 700, color: "#2D2520", marginBottom: 8,
+              }}>Create your account</div>
+              <div style={{
+                fontSize: 13, color: "#8C7E72", lineHeight: 1.6,
+              }}>Sign up with your email. No credit card, no commitments.</div>
+            </div>
+            <div style={{
+              background: "#EFEBE5", borderRadius: 16, padding: "28px 24px",
+              borderTop: "3px solid #E8664A",
+            }}>
+              <div style={{
+                fontSize: 17, fontWeight: 700, color: "#2D2520", marginBottom: 8,
+              }}>Tell Ella who you are</div>
+              <div style={{
+                fontSize: 13, color: "#8C7E72", lineHeight: 1.6,
+              }}>Add your industry, paste your LinkedIn profile URL, and tell Ella how you think. She'll research your world so every post is personal.</div>
+            </div>
+            <div style={{
+              background: "#EFEBE5", borderRadius: 16, padding: "28px 24px",
+              borderTop: "3px solid #E8664A",
+            }}>
+              <div style={{
+                fontSize: 17, fontWeight: 700, color: "#2D2520", marginBottom: 8,
+              }}>Start creating</div>
+              <div style={{
+                fontSize: 13, color: "#8C7E72", lineHeight: 1.6,
+              }}>Pick a topic, add your take, and let Ella draft a post that sounds like you wrote it.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ─── Features ─── */}
-      <div id="features" style={{ padding: "80px 32px" }}>
+      <div id="features" style={{ background: "#EFEBE5", padding: "80px 32px" }}>
         <div style={{ maxWidth: 1120, margin: "0 auto" }}>
           <p style={{
             fontSize: 12, fontWeight: 700, color: "#E8664A", textTransform: "uppercase",
@@ -225,29 +314,22 @@ export default function Landing() {
           <h2 style={{
             fontFamily: "'DM Serif Display', serif", fontSize: 36, fontWeight: 400,
             textAlign: "center", color: "#2D2520", marginBottom: 56,
-          }}>Everything you need to win on LinkedIn</h2>
+          }}>Everything you need to post with confidence</h2>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
             {FEATURES.map((f, i) => (
               <div key={i} style={{
-                background: "#EFEBE5", borderRadius: 16, padding: "28px 24px",
+                background: "#F7F3EE", borderRadius: 16, padding: "28px 24px",
                 transition: "transform 0.15s ease",
               }}>
                 <div style={{
                   width: 44, height: 44, borderRadius: 12, marginBottom: 16,
-                  background: "#F7F3EE", display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "rgba(232,102,74,0.06)", display: "flex", alignItems: "center", justifyContent: "center",
                 }}>
                   {featureIcons[f.icon]}
                 </div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: "#2D2520", marginBottom: 6 }}>
                   {f.title}
-                  {f.pro && (
-                    <span style={{
-                      fontSize: 10, color: "#E8664A", marginLeft: 8,
-                      background: "rgba(232,102,74,0.08)", padding: "3px 8px", borderRadius: 10,
-                      fontWeight: 700, letterSpacing: 0.5, verticalAlign: "middle",
-                    }}>PRO</span>
-                  )}
                 </div>
                 <div style={{ fontSize: 13, color: "#8C7E72", lineHeight: 1.6 }}>{f.desc}</div>
               </div>
@@ -256,8 +338,8 @@ export default function Landing() {
         </div>
       </div>
 
-      {/* ─── Pricing teaser ─── */}
-      <div id="pricing" style={{ background: "#EFEBE5", padding: "80px 32px" }}>
+      {/* ─── Pricing ─── */}
+      <div id="pricing" style={{ padding: "80px 32px" }}>
         <div style={{ maxWidth: 800, margin: "0 auto", textAlign: "center" }}>
           <p style={{
             fontSize: 12, fontWeight: 700, color: "#E8664A", textTransform: "uppercase",
@@ -266,20 +348,19 @@ export default function Landing() {
           <h2 style={{
             fontFamily: "'DM Serif Display', serif", fontSize: 36, fontWeight: 400,
             color: "#2D2520", marginBottom: 16,
-          }}>Start free. Upgrade when you're ready.</h2>
+          }}>Start free. Post with confidence.</h2>
           <p style={{ fontSize: 15, color: "#8C7E72", lineHeight: 1.7, maxWidth: 500, margin: "0 auto 40px" }}>
-            Capture posts, run ML analysis, and generate drafts — all free.
-            Upgrade for fact validation, enriched drafts, and a larger database.
+            Everything you need to create LinkedIn posts that sound like you and build your professional credibility.
           </p>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 640, margin: "0 auto" }}>
             {/* Free tier */}
             <div style={{
-              background: "#F7F3EE", borderRadius: 16, padding: "32px 28px", textAlign: "left",
+              background: "#EFEBE5", borderRadius: 16, padding: "32px 28px", textAlign: "left",
             }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: "#8C7E72", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>Free</div>
               <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 32, color: "#2D2520", marginBottom: 20 }}>$0</div>
-              {["Screenshot capture", "ML pattern analysis", "AI post generation", "Chrome extension", "Post scoring"].map((item, i) => (
+              {["Guided creation flow", "Real-time industry research", "Post scoring (unlimited)"].map((item, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontSize: 13, color: "#6B5E54" }}>
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="#E8664A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   {item}
@@ -298,7 +379,7 @@ export default function Landing() {
             }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: "#E8664A", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>Pro</div>
               <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 32, color: "#F7F3EE", marginBottom: 20 }}>Coming soon</div>
-              {["Everything in Free", "Fact validation (Tavily + Perplexity)", "Enriched drafts with live data", "Larger post database", "Priority support"].map((item, i) => (
+              {["Everything in Free", "Unlimited post generation", "Chrome extension", "Pattern analysis", "Visual direction briefs", "Priority support"].map((item, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontSize: 13, color: "#B5A698" }}>
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="#E8664A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   {item}
@@ -324,9 +405,9 @@ export default function Landing() {
           <h2 style={{
             fontFamily: "'DM Serif Display', serif", fontSize: 32, fontWeight: 400,
             color: "#2D2520", marginBottom: 12,
-          }}>Start building your playbook</h2>
+          }}>Your expertise is worth more than a silent profile</h2>
           <p style={{ fontSize: 15, color: "#8C7E72", maxWidth: 400, margin: "0 auto 28px", lineHeight: 1.6 }}>
-            Capture your first post today. Ella gets smarter with every screenshot.
+            Ella helps you say it in a way that gets heard.
           </p>
           <button onClick={() => navigate("/signup")} style={{
             padding: "14px 32px", border: "none", borderRadius: 24,
@@ -339,9 +420,12 @@ export default function Landing() {
 
       {/* ─── Footer ─── */}
       <div style={{ borderTop: "1px solid #E8E2DA", padding: "28px 32px", textAlign: "center" }}>
-        <span style={{ fontSize: 12, color: "#B5A698" }}>
+        <div style={{ fontSize: 12, color: "#B5A698", marginBottom: 6 }}>
           Ella — named after an African Grey Parrot who learns your language and speaks it back better.
-        </span>
+        </div>
+        <div style={{ fontSize: 12, color: "#B5A698" }}>
+          Ella doesn't replace your voice. She makes sure it gets heard.
+        </div>
       </div>
     </div>
   );

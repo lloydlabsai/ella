@@ -46,27 +46,23 @@ export function getDrafterPrompt(industry, toneLabel, totalPosts, brandVoice, pr
     }
   }
 
-  // LinkedIn context — scraped profile data (secondary)
+  // LinkedIn context — user's own profile text (secondary to voice profile)
   if (linkedinContext) {
     const parts = [];
     if (linkedinContext.name) parts.push(`Name: ${linkedinContext.name}`);
     if (linkedinContext.headline) parts.push(`Headline: ${linkedinContext.headline}`);
     if (linkedinContext.current_role) parts.push(`Current role: ${linkedinContext.current_role}`);
-    if (linkedinContext.location) parts.push(`Location: ${linkedinContext.location}`);
-    if (linkedinContext.followers) parts.push(`Followers: ${linkedinContext.followers}`);
-    if (linkedinContext.about) parts.push(`About:\n${linkedinContext.about}`);
-    if (linkedinContext.experience?.length > 0) {
+    if (linkedinContext.about) parts.push(`About (in their own words):\n${linkedinContext.about}`);
+    // Support both raw text and structured experience
+    if (linkedinContext.experience_raw) {
+      parts.push(`Experience (in their own words):\n${linkedinContext.experience_raw}`);
+    } else if (linkedinContext.experience?.length > 0 && Array.isArray(linkedinContext.experience)) {
       const exp = linkedinContext.experience
         .map((e) => `- ${e.title}${e.company ? ` at ${e.company}` : ""}${e.duration ? ` (${e.duration})` : ""}`)
         .join("\n");
       parts.push(`Experience:\n${exp}`);
     }
-    if (linkedinContext.education?.length > 0) {
-      const edu = linkedinContext.education
-        .map((e) => `- ${e.school}${e.degree ? ` — ${e.degree}` : ""}`)
-        .join("\n");
-      parts.push(`Education:\n${edu}`);
-    }
+    if (linkedinContext.location) parts.push(`Location: ${linkedinContext.location}`);
     if (linkedinContext.skills?.length > 0) {
       parts.push(`Skills: ${linkedinContext.skills.join(", ")}`);
     }

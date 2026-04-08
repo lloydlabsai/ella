@@ -3,7 +3,7 @@ import { callClaude } from "../lib/api";
 
 export default function Settings({ profile, updateProfile }) {
   const [form, setForm] = useState({
-    display_name: "", industry: "", brand_voice: "",
+    display_name: "", industry: "", occupation: "", brand_voice: "",
     product_name: "", product_description: "",
   });
   const [voiceProfile, setVoiceProfile] = useState({
@@ -11,15 +11,16 @@ export default function Settings({ profile, updateProfile }) {
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [linkedinUrl, setLinkedinUrl] = useState("");
-  const [importing, setImporting] = useState(false);
-  const [importError, setImportError] = useState(null);
+  const [linkedinFields, setLinkedinFields] = useState({
+    headline: "", about: "", experience: "",
+  });
 
   useEffect(() => {
     if (profile) {
       setForm({
         display_name: profile.display_name || "",
         industry: profile.industry || "",
+        occupation: profile.occupation || "",
         brand_voice: profile.brand_voice || "",
         product_name: profile.product_name || "",
         product_description: profile.product_description || "",
@@ -31,65 +32,15 @@ export default function Settings({ profile, updateProfile }) {
           communication_style: profile.voice_profile.communication_style || "",
         });
       }
+      if (profile.linkedin_context) {
+        setLinkedinFields({
+          headline: profile.linkedin_context.headline || "",
+          about: profile.linkedin_context.about || "",
+          experience: profile.linkedin_context.experience_raw || profile.linkedin_context.experience || "",
+        });
+      }
     }
   }, [profile]);
-
-  const importLinkedInProfile = async () => {
-    const url = linkedinUrl.trim();
-    if (!url || !url.includes("linkedin.com/in/")) {
-      setImportError("Please paste a valid LinkedIn profile URL (e.g. linkedin.com/in/yourname)");
-      return;
-    }
-    setImporting(true);
-    setImportError(null);
-    try {
-      const raw = await callClaude(
-        `You are a profile data extractor. The user will give you a LinkedIn profile URL. Use web search to find as much information as possible about this person's professional background.
-
-SEARCH STRATEGY:
-1. First search the exact LinkedIn URL
-2. Then search for the person's name + company + LinkedIn to find cached profile data, bios, team pages, press mentions, podcast appearances, etc.
-3. Search for their name + company on the company website (team/about pages often have full bios)
-4. Try each search separately to maximize coverage
-
-Extract EVERYTHING you can find across all sources. Return ONLY valid JSON, no markdown fences, no preamble.
-
-{
-  "name": "Full Name",
-  "headline": "Their LinkedIn headline or professional tagline",
-  "location": "City, State/Country or null",
-  "about": "Their About/summary section or bio text. Combine sources if needed. This is the most valuable field — get as much as possible.",
-  "current_role": "Current job title at Company or null",
-  "industry": "Their industry (infer from headline/experience if not explicit)",
-  "followers": "follower count as string or null",
-  "connections": "connection count as string or null",
-  "experience": [{"title": "Job Title", "company": "Company Name", "duration": "Date range or null", "description": "Role description or null"}],
-  "education": [{"school": "School Name", "degree": "Degree or null"}],
-  "skills": ["skill1", "skill2", "skill3"]
-}
-
-Include ALL experience entries you can find — not just the current role. For fields you can't find, use null or empty arrays.`,
-        `Extract profile data from this LinkedIn profile: ${url}`,
-        { useWebSearch: true }
-      );
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("Could not parse profile data");
-      const profileData = JSON.parse(jsonMatch[0]);
-      const linkedinContext = { ...profileData, captured_at: new Date().toISOString(), source: "url_import" };
-      await updateProfile({ linkedin_context: linkedinContext });
-      // Auto-fill display name and industry if empty
-      const updates = {};
-      if (!form.display_name && profileData.name) updates.display_name = profileData.name;
-      if (!form.industry && profileData.industry) updates.industry = profileData.industry;
-      if (Object.keys(updates).length > 0) {
-        setForm(prev => ({ ...prev, ...updates }));
-      }
-      setLinkedinUrl("");
-    } catch (err) {
-      setImportError(err.message || "Failed to import profile");
-    }
-    setImporting(false);
-  };
 
   const [researching, setResearching] = useState(false);
 
@@ -164,7 +115,13 @@ Include ALL experience entries you can find — not just the current role. For f
   const handleSave = async () => {
     setSaving(true);
     try {
-      const updates = { ...form, voice_profile: voiceProfile };
+      const linkedinContext = {
+        headline: linkedinFields.headline,
+        about: linkedinFields.about,
+        experience_raw: typeof linkedinFields.experience === 'string' ? linkedinFields.experience : '',
+        name: form.display_name,
+      };
+      const updates = { ...form, voice_profile: voiceProfile, linkedin_context: linkedinContext };
 
       // Run persona research if we have enough profile data and haven't done it yet,
       // or if key fields changed
@@ -209,6 +166,27 @@ Include ALL experience entries you can find — not just the current role. For f
       </p>
 
       <div style={{ maxWidth: 520 }}>
+        {/* 1. Industry */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={labelStyle}>Industry</label>
+          <input style={inputStyle} value={form.industry}
+            onChange={(e) => setForm((p) => ({ ...p, industry: e.target.value }))}
+            placeholder="e.g., SaaS, Healthcare, CPG Food & Bev, FinTech, Real Estate..." />
+          <div style={{ fontSize: 11, color: "#B5A698", marginTop: 4 }}>
+            Ella researches and writes for your specific corner of this industry
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <label style={labelStyle}>Occupation</label>
+          <input style={inputStyle} value={form.occupation}
+            onChange={(e) => setForm((p) => ({ ...p, occupation: e.target.value }))}
+            placeholder="e.g., VP of Marketing, Founder, Category Manager, Sales Director..." />
+          <div style={{ fontSize: 11, color: "#B5A698", marginTop: 4 }}>
+            Your role shapes what topics Ella surfaces — a CMO sees different news than a supply chain director
+          </div>
+        </div>
+
         <div style={{ marginBottom: 20 }}>
           <label style={labelStyle}>Display Name</label>
           <input style={inputStyle} value={form.display_name}
@@ -216,155 +194,41 @@ Include ALL experience entries you can find — not just the current role. For f
             placeholder="Your name" />
         </div>
 
-        <div style={{ marginBottom: 20 }}>
-          <label style={labelStyle}>Industry</label>
-          <input style={inputStyle} value={form.industry}
-            onChange={(e) => setForm((p) => ({ ...p, industry: e.target.value }))}
-            placeholder="e.g., SaaS, Healthcare, CPG Food & Bev, FinTech, Real Estate..." />
-          <div style={{ fontSize: 11, color: "#B5A698", marginTop: 4 }}>
-            This tells Ella's agents what industry to research and tailor posts for
-          </div>
-        </div>
-
-        <div style={{ marginBottom: 20 }}>
-          <label style={labelStyle}>Brand Voice</label>
-          <textarea style={{ ...inputStyle, minHeight: 100, resize: "vertical", lineHeight: 1.5 }}
-            value={form.brand_voice}
-            onChange={(e) => setForm((p) => ({ ...p, brand_voice: e.target.value }))}
-            placeholder="Describe your writing style. e.g., 'Direct and conversational. I use short sentences. I challenge conventional wisdom but back it up with data. Occasional dry humor.'" />
-          <div style={{ fontSize: 11, color: "#B5A698", marginTop: 4 }}>
-            The draft writer will match this tone and style
-          </div>
-        </div>
-
-        {/* LinkedIn Profile Context */}
+        {/* 2. Your LinkedIn profile */}
         <div style={{
           background: "#fff", border: "1px solid #EDE8E1",
           borderRadius: 12, padding: "18px 20px", marginBottom: 24,
           boxShadow: "0 1px 3px rgba(45,37,32,0.04)",
         }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "#2D2520", marginBottom: 4 }}>
-            LinkedIn Profile
+            Your LinkedIn Profile
           </div>
-          {profile?.linkedin_context?.name ? (
-            <div>
-              <div style={{ fontSize: 12, color: "#6B9E7D", marginBottom: 12, fontWeight: 600 }}>
-                Ella writes drafts from your perspective using this profile.
-              </div>
-              <div style={{ background: "#F7F3EE", borderRadius: 8, padding: "14px 16px", marginBottom: 12 }}>
-                {/* Name + headline + location */}
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#2D2520" }}>{profile.linkedin_context.name}</div>
-                {profile.linkedin_context.headline && (
-                  <div style={{ fontSize: 12, color: "#5C534A", marginTop: 2 }}>{profile.linkedin_context.headline}</div>
-                )}
-                <div style={{ display: "flex", gap: 12, marginTop: 6, fontSize: 11, color: "#B5A698" }}>
-                  {profile.linkedin_context.location && <span>{profile.linkedin_context.location}</span>}
-                  {profile.linkedin_context.followers && <span>{profile.linkedin_context.followers} followers</span>}
-                  {profile.linkedin_context.connections && <span>{profile.linkedin_context.connections} connections</span>}
-                </div>
+          <div style={{ fontSize: 11, color: "#8B7E74", marginBottom: 16, lineHeight: 1.5 }}>
+            Paste these from your LinkedIn profile. Ella uses your own words to write in your voice.
+          </div>
 
-                {/* About — full text */}
-                {profile.linkedin_context.about && (
-                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #E8E2DA" }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 4 }}>About</div>
-                    <div style={{ fontSize: 12, color: "#5C534A", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
-                      {profile.linkedin_context.about}
-                    </div>
-                  </div>
-                )}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ ...labelStyle, fontSize: 11 }}>Your headline</label>
+            <input style={inputStyle}
+              value={linkedinFields.headline}
+              onChange={(e) => setLinkedinFields(prev => ({ ...prev, headline: e.target.value }))}
+              placeholder="e.g., Founder, CPG Canary | 16 Yrs CPG Manufacturing" />
+          </div>
 
-                {/* Current role */}
-                {profile.linkedin_context.current_role && (
-                  <div style={{ marginTop: 10, fontSize: 12, color: "#2D2520", fontWeight: 600 }}>
-                    Current: {profile.linkedin_context.current_role}
-                  </div>
-                )}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ ...labelStyle, fontSize: 11 }}>Your About section</label>
+            <textarea style={{ ...inputStyle, minHeight: 100, resize: "vertical", lineHeight: 1.5 }}
+              value={linkedinFields.about}
+              onChange={(e) => setLinkedinFields(prev => ({ ...prev, about: e.target.value }))}
+              placeholder="Paste your LinkedIn About section here" />
+          </div>
 
-                {/* Experience — all entries */}
-                {profile.linkedin_context.experience?.length > 0 && (
-                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #E8E2DA" }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 6 }}>Experience</div>
-                    {profile.linkedin_context.experience.map((e, i) => (
-                      <div key={i} style={{ marginBottom: 8 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: "#2D2520" }}>{e.title}</div>
-                        {e.company && <div style={{ fontSize: 11, color: "#5C534A" }}>{e.company}</div>}
-                        {e.duration && <div style={{ fontSize: 10, color: "#B5A698" }}>{e.duration}</div>}
-                        {e.description && <div style={{ fontSize: 10, color: "#8B7E74", marginTop: 2 }}>{e.description}</div>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Education */}
-                {profile.linkedin_context.education?.length > 0 && (
-                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #E8E2DA" }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 6 }}>Education</div>
-                    {profile.linkedin_context.education.map((e, i) => (
-                      <div key={i} style={{ marginBottom: 6 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: "#2D2520" }}>{e.school}</div>
-                        {e.degree && <div style={{ fontSize: 11, color: "#5C534A" }}>{e.degree}</div>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Skills */}
-                {profile.linkedin_context.skills?.length > 0 && (
-                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #E8E2DA" }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#B5A698", textTransform: "uppercase", marginBottom: 6 }}>Skills</div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                      {profile.linkedin_context.skills.map((s, i) => (
-                        <span key={i} style={{ fontSize: 10, color: "#5C534A", background: "#fff", border: "1px solid #E8E2DA", padding: "2px 8px", borderRadius: 10 }}>{s}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div style={{ fontSize: 11, color: "#B5A698" }}>
-                Paste your URL again to refresh.
-                {profile.linkedin_context.captured_at && <span> · Last imported: {new Date(profile.linkedin_context.captured_at).toLocaleDateString()}</span>}
-                {profile.linkedin_context.source === "url_import" && <span> · via URL</span>}
-              </div>
-            </div>
-          ) : (
-            <div style={{ fontSize: 12, color: "#8B7E74", lineHeight: 1.5, marginBottom: 12 }}>
-              Paste your LinkedIn profile URL so Ella can write posts from your perspective.
-            </div>
-          )}
-
-          {/* URL import input */}
-          <div style={{ marginTop: 12 }}>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input
-                style={{ ...inputStyle, flex: 1 }}
-                value={linkedinUrl}
-                onChange={(e) => { setLinkedinUrl(e.target.value); setImportError(null); }}
-                placeholder="https://linkedin.com/in/yourname"
-                disabled={importing}
-                onKeyDown={(e) => { if (e.key === "Enter") importLinkedInProfile(); }}
-              />
-              <button
-                onClick={importLinkedInProfile}
-                disabled={importing || !linkedinUrl.trim()}
-                style={{
-                  padding: "10px 18px", border: "none", borderRadius: 10,
-                  background: importing ? "#E8E2DA" : "#E8664A",
-                  color: importing ? "#B5A698" : "#fff",
-                  fontSize: 12, fontWeight: 700, cursor: importing ? "wait" : "pointer",
-                  fontFamily: "inherit", whiteSpace: "nowrap",
-                }}
-              >
-                {importing ? "Importing..." : profile?.linkedin_context?.name ? "Refresh" : "Import"}
-              </button>
-            </div>
-            {importError && (
-              <div style={{ fontSize: 11, color: "#D4695A", marginTop: 6 }}>{importError}</div>
-            )}
-            {importing && (
-              <div style={{ fontSize: 11, color: "#B5A698", marginTop: 6 }}>
-                Searching LinkedIn and extracting your profile data...
-              </div>
-            )}
+          <div>
+            <label style={{ ...labelStyle, fontSize: 11 }}>Your Experience</label>
+            <textarea style={{ ...inputStyle, minHeight: 100, resize: "vertical", lineHeight: 1.5 }}
+              value={typeof linkedinFields.experience === 'string' ? linkedinFields.experience : ''}
+              onChange={(e) => setLinkedinFields(prev => ({ ...prev, experience: e.target.value }))}
+              placeholder="Paste your LinkedIn Experience section here — include job titles, companies, and descriptions" />
           </div>
         </div>
 
@@ -443,28 +307,40 @@ Include ALL experience entries you can find — not just the current role. For f
             </div>
             <div style={{ fontSize: 11, color: "#8B7E74", marginTop: 2 }}>
               {profile?.tier === "paid"
-                ? "Real-time fact validation with Tavily & Perplexity enabled"
-                : "Upgrade to Pro for real-time fact validation and enrichment"}
+                ? "Unlimited post generation and pattern analysis"
+                : "3 posts per month. Pro with unlimited posts coming soon."}
             </div>
           </div>
           {profile?.tier !== "paid" && (
-            <button style={{
+            <button onClick={() => window.open("https://getella.io/#pricing", "_blank")} style={{
               padding: "8px 18px", border: "none", borderRadius: 20,
-              background: "#E8664A", color: "#fff",
+              background: "#2D2520", color: "#fff",
               fontSize: 12, fontWeight: 700, cursor: "pointer",
-            }}>Upgrade</button>
+            }}>Join Waitlist</button>
           )}
         </div>
 
-        <button onClick={handleSave} disabled={saving} style={{
+        <button onClick={handleSave} disabled={saving || researching} style={{
           padding: "14px 32px", border: "none", borderRadius: 24,
-          background: saved ? "#6B9E7D" : saving ? "#E8E2DA" : "#E8664A",
-          color: saved ? "#fff" : saving ? "#B5A698" : "#fff",
-          fontSize: 14, fontWeight: 700, cursor: saving ? "wait" : "pointer",
+          background: saved ? "#6B9E7D" : (saving || researching) ? "#E8E2DA" : "#E8664A",
+          color: saved ? "#fff" : (saving || researching) ? "#B5A698" : "#fff",
+          fontSize: 14, fontWeight: 700, cursor: (saving || researching) ? "wait" : "pointer",
           transition: "all 0.2s",
         }}>
-          {saved ? "Saved" : researching ? "Ella is learning about you..." : saving ? "Saving..." : "Save Settings"}
+          {saved ? "Saved" : saving ? "Saving..." : "Save Settings"}
         </button>
+        {researching && (
+          <div style={{ marginTop: 16, textAlign: "center" }}>
+            <div style={{
+              width: 24, height: 24, border: "3px solid #EDE8E1", borderTopColor: "#E8664A",
+              borderRadius: "50%", animation: "spin 0.8s linear infinite",
+              margin: "0 auto 8px",
+            }} />
+            <div style={{ fontSize: 13, color: "#E8664A", fontWeight: 600 }}>Ella is learning about you...</div>
+            <div style={{ fontSize: 11, color: "#B5A698", marginTop: 4 }}>Researching your industry, competitors, and niche. This takes 15-30 seconds.</div>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </div>
+        )}
       </div>
     </div>
   );

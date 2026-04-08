@@ -7,7 +7,7 @@
 import { supabase } from "./supabase";
 
 const DIRECT_URL = "https://api.anthropic.com/v1/messages";
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6-20250514";
 
 function getEndpoint() {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
