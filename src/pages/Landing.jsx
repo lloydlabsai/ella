@@ -275,7 +275,7 @@ export default function Landing() {
               }}>Create your account</div>
               <div style={{
                 fontSize: 13, color: "#8C7E72", lineHeight: 1.6,
-              }}>Sign up with your email. No credit card, no commitments.</div>
+              }}>Sign up with your email. No credit card, no commitments. You're 2 minutes from your first draft.</div>
             </div>
             <div style={{
               background: "#EFEBE5", borderRadius: 16, padding: "28px 24px",
@@ -286,7 +286,7 @@ export default function Landing() {
               }}>Tell Ella who you are</div>
               <div style={{
                 fontSize: 13, color: "#8C7E72", lineHeight: 1.6,
-              }}>Your industry, your role, your LinkedIn headline and experience, and a few questions about how you think. Ella uses all of it to write as you.</div>
+              }}>Ella doesn't just ask what you do — she asks how you think. Your role, your industry, your LinkedIn background, and a few questions about your perspective. This is why your drafts sound like you, not like a chatbot.</div>
             </div>
             <div style={{
               background: "#EFEBE5", borderRadius: 16, padding: "28px 24px",
@@ -297,7 +297,7 @@ export default function Landing() {
               }}>Start creating</div>
               <div style={{
                 fontSize: 13, color: "#8C7E72", lineHeight: 1.6,
-              }}>Pick a topic, add your take, and let Ella draft a post that sounds like you wrote it.</div>
+              }}>Pick a trending topic or bring your own. Add one sentence of your take. Ella handles the research, the structure, and the voice. You handle the insight.</div>
             </div>
           </div>
 
