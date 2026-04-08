@@ -287,7 +287,7 @@ export default function Landing() {
               }}>Tell Ella who you are</div>
               <div style={{
                 fontSize: 13, color: "#8C7E72", lineHeight: 1.6,
-              }}>Add your industry, paste your LinkedIn profile URL, and tell Ella how you think. She'll research your world so every post is personal.</div>
+              }}>Your industry, your role, your LinkedIn headline and experience, and a few questions about how you think. Ella uses all of it to write as you.</div>
             </div>
             <div style={{
               background: "#EFEBE5", borderRadius: 16, padding: "28px 24px",
@@ -299,6 +299,16 @@ export default function Landing() {
               <div style={{
                 fontSize: 13, color: "#8C7E72", lineHeight: 1.6,
               }}>Pick a topic, add your take, and let Ella draft a post that sounds like you wrote it.</div>
+            </div>
+          </div>
+
+          {/* Role callout */}
+          <div style={{
+            marginTop: 32, padding: "20px 28px", background: "rgba(232,102,74,0.04)",
+            border: "1px solid rgba(232,102,74,0.12)", borderRadius: 12, textAlign: "center",
+          }}>
+            <div style={{ fontSize: 14, color: "#2D2520", lineHeight: 1.7, maxWidth: 600, margin: "0 auto" }}>
+              Ella doesn't just know your industry. <strong style={{ color: "#E8664A" }}>She knows your role.</strong> A marketing director gets different topics than a procurement lead. Same industry, completely different posts.
             </div>
           </div>
         </div>
