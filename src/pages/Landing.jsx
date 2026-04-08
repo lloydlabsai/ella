@@ -11,9 +11,9 @@ export default function Landing() {
   ];
 
   const WHY_NOW = [
-    { title: "Your profile is your first impression", desc: "Recruiters, clients, and partners check your LinkedIn before your website. Thoughtful posts show something a resume can't: how you think and whether you're paying attention." },
-    { title: "Visibility creates opportunity", desc: "The people getting inbound calls, speaking invitations, and partnership offers aren't the most qualified. They're the most visible." },
-    { title: "Your expertise is going to waste", desc: "You have years of pattern recognition and professional judgment. If it stays in your head, it's not working for you." },
+    { title: "Your profile is a digital background check", desc: "Recruiters, clients, and partners vet your LinkedIn before they ever visit your website. A static profile suggests you've stopped growing. A dynamic, insight-driven feed proves you're still leading the conversation." },
+    { title: "Visibility is the ultimate multiplier", desc: "The professionals landing speaking slots and partnership offers aren't always the most qualified — they're the most visible. Only 5% of LinkedIn users post original content. Showing up consistently is the easiest competitive advantage most professionals ignore." },
+    { title: "Your expertise is a depreciating asset", desc: "Your professional judgment is your most valuable asset. If it only exists in private meetings, it's not working for you. The people building inbound pipelines are the ones putting their thinking where others can find it." },
   ];
 
   const STEPS = [
