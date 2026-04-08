@@ -1,27 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { callClaude } from "../lib/api";
+import { callClaude, getGenerationCount } from "../lib/api";
 import { extractFeatures } from "../utils/features";
 import { formatInsightsForPrompt } from "../utils/pipeline";
 import { getSeedPatterns } from "../utils/seed-patterns";
 import { getDrafterPrompt } from "../utils/prompts";
-
-// ─── Rate Limiting (monthly) ─────────────────────────────
-
-const RATE_KEY = "ella_gen_timestamps";
-function getGenerationsThisMonth() {
-  try {
-    const raw = localStorage.getItem(RATE_KEY);
-    if (!raw) return [];
-    const ts = JSON.parse(raw);
-    const start = new Date(); start.setDate(1); start.setHours(0,0,0,0);
-    return ts.filter((t) => t >= start.getTime());
-  } catch { return []; }
-}
-function recordGeneration() {
-  const thisMonth = getGenerationsThisMonth();
-  thisMonth.push(Date.now());
-  localStorage.setItem(RATE_KEY, JSON.stringify(thisMonth));
-}
 
 // ─── Collapsible Section ──────────────────────────────────
 
@@ -175,7 +157,13 @@ export default function Generate({ profile, mlResults, postCount = 0, recentPost
   const industry = profile?.industry || "";
   const tier = profile?.tier || "free";
   const monthlyLimit = tier === "paid" ? 50 : 3;
-  const remaining = Math.max(0, monthlyLimit - getGenerationsThisMonth().length);
+  const [genCount, setGenCount] = useState(0);
+  const remaining = Math.max(0, monthlyLimit - genCount);
+
+  // Fetch server-side generation count on mount
+  useEffect(() => {
+    getGenerationCount().then(setGenCount).catch(() => {});
+  }, []);
 
   // ─── State ──────────────────────────────────────────────
   const [expanded, setExpanded] = useState({ spark: true, landscape: false, take: false, draft: false, visual: false, check: false });
@@ -389,12 +377,13 @@ JSON array only, 6 items.`,
         getDrafterPrompt(industry, "Thought Leader", effectiveResults?.totalPosts || 0, profile?.brand_voice, profile?.product_name, profile?.product_description, profile?.linkedin_context, profile?.voice_profile, profile?.persona_research)
           .replace(/Write two drafts[\s\S]*$/, "Write ONE draft. The user's take is the thesis. Use the selected facts as supporting evidence. Frame it for the selected audience. The user's words and viewpoint drive the post — you're structuring and polishing their thinking, not replacing it.\n\nNo meta-commentary. No explanations. Just the post, ready to paste into LinkedIn."),
         userMessage,
-        { model: "claude-opus-4-6" }
+        { model: "claude-opus-4-6", isGeneration: true }
       );
       const cleaned = cleanDraft(resp);
       const paragraphs = cleaned.split(/\n\n+/).filter((p) => p.trim());
       setBlocks(paragraphs.map((text, i) => ({ id: `b-${Date.now()}-${i}`, text: text.trim() })));
-      recordGeneration();
+      // Refresh server-side count
+      getGenerationCount().then(setGenCount).catch(() => {});
       open("draft");
       open("visual");
       open("check");
