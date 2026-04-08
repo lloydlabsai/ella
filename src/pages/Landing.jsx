@@ -24,12 +24,12 @@ export default function Landing() {
   ];
 
   const FEATURES = [
-    { title: "Any Industry", desc: "CPG, SaaS, healthcare, fintech, real estate — Ella researches and writes for your specific niche.", icon: "industry" },
-    { title: "Learns What Works", desc: "As you use Ella, she learns what resonates in your niche — which hooks, vocabulary, and structures drive engagement.", icon: "ml" },
-    { title: "Instant Value", desc: "Generate posts on day one. No setup required. Ella gets sharper as you use it.", icon: "instant" },
-    { title: "Your Voice", desc: "Tell Ella how you think and communicate. Drafts sound like you, not like AI.", icon: "voice" },
-    { title: "Post Scorer", desc: "Paste any draft and get an instant scorecard — hook strength, structure, readability, algorithm fit. Free and unlimited.", icon: "validate" },
-    { title: "Private by Default", desc: "Your posts, your patterns, your data. Row-level security on everything.", icon: "private" },
+    { title: "Any Industry", desc: "CPG, SaaS, healthcare, logistics — Ella researches your specific niche in real time. Every topic suggestion and every draft is grounded in what's actually happening in your industry right now.", icon: "industry" },
+    { title: "Learns What Works", desc: "Ella identifies the hooks, structures, and vocabulary currently winning in your niche. She doesn't guess what works — she reverse-engineers it from posts that are actually performing.", icon: "ml" },
+    { title: "Instant Value", desc: "Your first post takes minutes, not hours. Ella is ready on day one and gets sharper the more you use her.", icon: "instant" },
+    { title: "Your Voice", desc: "Not simulated. Captured. Ella models your professional judgment and tone so drafts pass the vibe check with your most skeptical peers.", icon: "voice" },
+    { title: "Post Scorer", desc: "Paste any draft and know if it'll land. Hook strength, structure, readability, algorithm fit — instant, free, unlimited.", icon: "validate" },
+    { title: "Private by Default", desc: "Your insights are your competitive advantage. Row-level security on everything. We build your reputation, we don't share your secrets.", icon: "private" },
   ];
 
   const featureIcons = {
