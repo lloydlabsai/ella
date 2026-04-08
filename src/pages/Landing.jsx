@@ -389,7 +389,7 @@ export default function Landing() {
                 width: "100%", padding: "12px", border: "none", borderRadius: 20,
                 background: "#E8664A", color: "#fff", fontSize: 14, fontWeight: 700,
                 cursor: "pointer", fontFamily: "inherit", marginTop: 20,
-              }}>Join Waitlist</button>
+              }}>Get Started Free</button>
             </div>
           </div>
         </div>
@@ -420,9 +420,6 @@ export default function Landing() {
 
       {/* ─── Footer ─── */}
       <div style={{ borderTop: "1px solid #E8E2DA", padding: "28px 32px", textAlign: "center" }}>
-        <div style={{ fontSize: 12, color: "#B5A698", marginBottom: 6 }}>
-          Ella — named after an African Grey Parrot who learns your language and speaks it back better.
-        </div>
         <div style={{ fontSize: 12, color: "#B5A698" }}>
           Ella doesn't replace your voice. She makes sure it gets heard.
         </div>
