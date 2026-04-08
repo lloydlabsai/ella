@@ -17,10 +17,10 @@ export default function Landing() {
   ];
 
   const STEPS = [
-    { num: "01", title: "Spark", desc: "Tell Ella what caught your eye — a news story, a trend, or an opinion. Or let Ella surface what's trending in your industry." },
-    { num: "02", title: "Research", desc: "Ella finds the facts, angles, and data. You pick what matters and dismiss what doesn't." },
-    { num: "03", title: "Your Take", desc: "Add the insight only you have. One sentence of your perspective shapes the entire post." },
-    { num: "04", title: "Draft & Polish", desc: "Ella writes a draft using your voice and real-time research. Edit, sharpen, and post with confidence." },
+    { num: "01", title: "Capture the Signal", desc: "You saw a headline about tariffs hitting your supply chain. A competitor made a move. Or Ella surfaces 5 trending signals in your niche. Pick the one that matters — you're already past the blank page." },
+    { num: "02", title: "Filter the Context", desc: "Ella pulls the data, the facts, and the angles. You toggle off the fluff and keep the 2-3 insights that actually drive value. This is where your professional judgment does the filtering no generic AI can do." },
+    { num: "03", title: "Inject the Insight", desc: "One sentence. Your take. The in-the-trenches perspective from a decade of experience. This is the 10% of effort that turns a news update into a post worth stopping for." },
+    { num: "04", title: "Ship It", desc: "Ella assembles the draft in your voice, optimized for the feed. Sharpen a line, check the performance score, copy to clipboard. Done before your coffee gets cold." },
   ];
 
   const FEATURES = [
