@@ -277,6 +277,7 @@ Return a JSON array. Each item: {"headline":"the specific thing that happened","
 JSON array only, 6 items.`,
         { useWebSearch: true }
       );
+      console.log("[Ella's Picks] Raw first response:", resp.slice(0, 800));
       let cleaned = resp.replace(/```json\s?|```/g, "").trim();
       let arrMatch = cleaned.match(/\[[\s\S]*\]/);
       if (!arrMatch) {
@@ -286,12 +287,13 @@ JSON array only, 6 items.`,
           `Find 6 specific recent news events relevant to a ${occupation || 'professional'} in ${industry}. Return JSON array: [{"headline":"what happened","context":"2 sentences","why":"debate angle"}]`,
           { useWebSearch: true }
         );
+        console.log("[Ella's Picks] Raw retry response:", retry.slice(0, 800));
         cleaned = retry.replace(/```json\s?|```/g, "").trim();
         arrMatch = cleaned.match(/\[[\s\S]*\]/);
       }
       if (!arrMatch) {
-        console.error("Ideas raw response:", cleaned.slice(0, 500));
-        throw new Error("Couldn't load topics — try again");
+        console.error("Ideas raw response (full):", cleaned);
+        throw new Error("Couldn't load topics — check console for raw response");
       }
       const parsed = JSON.parse(arrMatch[0]);
       setIdeas(Array.isArray(parsed) ? parsed : []);

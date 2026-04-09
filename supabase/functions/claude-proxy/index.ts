@@ -109,9 +109,9 @@ serve(async (req) => {
     }
 
     // Enforce model allowlist and max_tokens limits
-    const ALLOWED_MODELS = ["claude-sonnet-4-20250514", "claude-sonnet-4-6-20250514", "claude-opus-4-6"];
+    const ALLOWED_MODELS = ["claude-sonnet-4-20250514", "claude-sonnet-4-6", "claude-opus-4-6", "claude-opus-4-20250514"];
     if (!ALLOWED_MODELS.includes(body.model)) {
-      body.model = "claude-sonnet-4-6-20250514";
+      body.model = "claude-sonnet-4-20250514";
     }
     body.max_tokens = Math.min(body.max_tokens || 1500, 8000);
 
