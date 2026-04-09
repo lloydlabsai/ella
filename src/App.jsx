@@ -11,6 +11,7 @@ import Score from "./pages/Score";
 // import Database from "./pages/Database";  // Disabled for free tier launch
 import Analyze from "./pages/Analyze";
 import Settings from "./pages/Settings";
+import { Terms, Privacy } from "./pages/Legal";
 
 export default function App() {
   const auth = useAuth();
@@ -41,6 +42,8 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<AuthForm onSignIn={auth.signIn} onSignUp={auth.signUp} initialMode="signin" />} />
           <Route path="/signup" element={<AuthForm onSignIn={auth.signIn} onSignUp={auth.signUp} initialMode="signup" />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
@@ -58,6 +61,8 @@ export default function App() {
           <Route path="/database" element={<Navigate to="/" replace />} />
           <Route path="/analyze" element={<Navigate to="/" replace />} /> {/* Disabled for free tier launch */}
           <Route path="/settings" element={<Settings profile={auth.profile} updateProfile={auth.updateProfile} />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>

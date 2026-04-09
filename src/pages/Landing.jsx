@@ -429,8 +429,13 @@ export default function Landing() {
 
       {/* ─── Footer ─── */}
       <div style={{ borderTop: "1px solid #E8E2DA", padding: "28px 32px", textAlign: "center" }}>
-        <div style={{ fontSize: 12, color: "#B5A698" }}>
+        <div style={{ fontSize: 12, color: "#B5A698", marginBottom: 10 }}>
           Ella doesn't replace your voice. She makes sure it gets heard.
+        </div>
+        <div style={{ display: "flex", gap: 20, justifyContent: "center", fontSize: 11, color: "#B5A698" }}>
+          <button onClick={() => navigate("/terms")} style={{ background: "none", border: "none", color: "#B5A698", cursor: "pointer", fontFamily: "inherit", fontSize: 11 }}>Terms</button>
+          <button onClick={() => navigate("/privacy")} style={{ background: "none", border: "none", color: "#B5A698", cursor: "pointer", fontFamily: "inherit", fontSize: 11 }}>Privacy</button>
+          <span>&copy; 2026 Ella</span>
         </div>
       </div>
     </div>

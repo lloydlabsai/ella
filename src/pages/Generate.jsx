@@ -571,6 +571,28 @@ Do NOT add em dashes (—), emoji, single-sentence dramatic lines, or formal con
         </div>
       </div>
 
+      {/* Welcome banner for new users without a profile */}
+      {!profile?.industry && (
+        <div style={{
+          padding: "18px 22px", background: "rgba(232,102,74,0.06)", border: "1.5px solid rgba(232,102,74,0.2)",
+          borderRadius: 12, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16,
+        }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#2D2520", marginBottom: 4 }}>
+              Welcome to Ella
+            </div>
+            <div style={{ fontSize: 12, color: "#8B7E74", lineHeight: 1.5 }}>
+              Set up your profile first so Ella can write in your voice. Takes about 2 minutes.
+            </div>
+          </div>
+          <button onClick={() => window.location.href = "/settings"} style={{
+            padding: "10px 20px", border: "none", borderRadius: 20,
+            background: "#E8664A", color: "#fff", fontSize: 13, fontWeight: 700,
+            cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit",
+          }}>Set up profile &rarr;</button>
+        </div>
+      )}
+
       {/* Topic bar — persistent when topic is set */}
       {topic && (
         <div style={{
