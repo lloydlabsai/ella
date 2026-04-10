@@ -165,31 +165,40 @@ export default function Generate({ profile, mlResults, postCount = 0, recentPost
     getGenerationCount().then(setGenCount).catch(() => {});
   }, []);
 
-  // ─── State ──────────────────────────────────────────────
-  const [expanded, setExpanded] = useState({ spark: true, landscape: false, take: false, draft: false, visual: false, check: false });
+  // ─── State — persisted to sessionStorage ───────────────
+  // Loads saved state so navigation between pages doesn't lose work
+  const loadSaved = (key, fallback) => {
+    try {
+      const raw = sessionStorage.getItem(`ella_${key}`);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return fallback;
+  };
+
+  const [expanded, setExpanded] = useState(() => loadSaved("expanded", { spark: true, landscape: false, take: false, draft: false, visual: false, check: false }));
   const toggle = (key) => setExpanded((e) => ({ ...e, [key]: !e[key] }));
   const open = (key) => setExpanded((e) => ({ ...e, [key]: true }));
 
   // Spark
-  const [sparkTab, setSparkTab] = useState("ideas");
-  const [topic, setTopic] = useState("");
-  const [ideas, setIdeas] = useState([]);
+  const [sparkTab, setSparkTab] = useState(() => loadSaved("sparkTab", "ideas"));
+  const [topic, setTopic] = useState(() => loadSaved("topic", ""));
+  const [ideas, setIdeas] = useState(() => loadSaved("ideas", []));
   const [loadingIdeas, setLoadingIdeas] = useState(false);
   const [customSpark, setCustomSpark] = useState("");
 
   // Landscape
-  const [facts, setFacts] = useState([]); // { text, enabled }
-  const [angles, setAngles] = useState([]); // { text, selected }
-  const [stakeholders, setStakeholders] = useState([]); // { name, selected }
+  const [facts, setFacts] = useState(() => loadSaved("facts", [])); // { text, enabled }
+  const [angles, setAngles] = useState(() => loadSaved("angles", [])); // { text, selected }
+  const [stakeholders, setStakeholders] = useState(() => loadSaved("stakeholders", [])); // { name, selected }
   const [loadingLandscape, setLoadingLandscape] = useState(false);
   const [whatAbout, setWhatAbout] = useState("");
   const [customAngle, setCustomAngle] = useState("");
 
   // Take
-  const [take, setTake] = useState("");
+  const [take, setTake] = useState(() => loadSaved("take", ""));
 
   // Draft
-  const [blocks, setBlocks] = useState([]); // { id, text }
+  const [blocks, setBlocks] = useState(() => loadSaved("blocks", [])); // { id, text }
   const [loadingDraft, setLoadingDraft] = useState(false);
   const [editingBlock, setEditingBlock] = useState(null);
   const [editText, setEditText] = useState("");
@@ -219,6 +228,17 @@ export default function Generate({ profile, mlResults, postCount = 0, recentPost
   const [copied, setCopied] = useState(false);
 
   const draftRef = useRef();
+
+  // ─── Persist to sessionStorage ──────────────────────────
+  useEffect(() => { sessionStorage.setItem("ella_expanded", JSON.stringify(expanded)); }, [expanded]);
+  useEffect(() => { sessionStorage.setItem("ella_sparkTab", JSON.stringify(sparkTab)); }, [sparkTab]);
+  useEffect(() => { sessionStorage.setItem("ella_topic", JSON.stringify(topic)); }, [topic]);
+  useEffect(() => { sessionStorage.setItem("ella_ideas", JSON.stringify(ideas)); }, [ideas]);
+  useEffect(() => { sessionStorage.setItem("ella_facts", JSON.stringify(facts)); }, [facts]);
+  useEffect(() => { sessionStorage.setItem("ella_angles", JSON.stringify(angles)); }, [angles]);
+  useEffect(() => { sessionStorage.setItem("ella_stakeholders", JSON.stringify(stakeholders)); }, [stakeholders]);
+  useEffect(() => { sessionStorage.setItem("ella_take", JSON.stringify(take)); }, [take]);
+  useEffect(() => { sessionStorage.setItem("ella_blocks", JSON.stringify(blocks)); }, [blocks]);
 
   // ─── Derived ────────────────────────────────────────────
   const fullDraftText = blocks.map((b) => b.text).join("\n\n");
