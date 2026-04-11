@@ -68,9 +68,36 @@ export default function Landing() {
   return (
     <div style={{ minHeight: "100vh", background: "#F7F3EE", color: "#2D2520", fontFamily: "'DM Sans', sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+      <style>{`
+        @media (max-width: 768px) {
+          .ella-nav { padding: 16px 20px !important; }
+          .ella-nav-buttons { gap: 10px !important; }
+          .ella-nav-buttons button { font-size: 12px !important; padding: 6px 14px !important; }
+
+          .ella-hero { grid-template-columns: 1fr !important; padding: 32px 20px 48px !important; gap: 24px !important; }
+          .ella-hero-illustration { width: 260px !important; height: 260px !important; }
+          .ella-hero h1 { font-size: 34px !important; }
+          .ella-hero p { font-size: 15px !important; }
+          .ella-hero-ctas { flex-wrap: wrap !important; }
+
+          .ella-section { padding: 48px 20px !important; }
+          .ella-section-inner { padding: 0 !important; }
+          .ella-section h2 { font-size: 26px !important; margin-bottom: 32px !important; }
+
+          .ella-grid-2, .ella-grid-3, .ella-grid-4 {
+            grid-template-columns: 1fr !important;
+            gap: 14px !important;
+          }
+
+          .ella-pricing-grid { grid-template-columns: 1fr !important; }
+
+          .ella-final-cta { padding: 40px 24px !important; }
+          .ella-final-cta h2 { font-size: 24px !important; }
+        }
+      `}</style>
 
       {/* ─── Nav ─── */}
-      <nav style={{
+      <nav className="ella-nav" style={{
         maxWidth: 1120, margin: "0 auto", padding: "20px 32px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
@@ -79,7 +106,7 @@ export default function Landing() {
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 20, fontWeight: 400, color: "#2D2520" }}>Ella</span>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div className="ella-nav-buttons" style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <button onClick={() => navigate("/login")} style={{
             background: "none", border: "none", color: "#6B5E54", fontSize: 14,
             fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
@@ -93,7 +120,7 @@ export default function Landing() {
       </nav>
 
       {/* ─── Hero ─── */}
-      <div style={{
+      <div className="ella-hero" style={{
         maxWidth: 1120, margin: "0 auto", padding: "60px 32px 80px",
         display: "grid", gridTemplateColumns: "1fr 1fr", alignItems: "center", gap: 60,
       }}>
@@ -107,7 +134,7 @@ export default function Landing() {
           <p style={{ fontSize: 16, color: "#8C7E72", lineHeight: 1.7, maxWidth: 480, marginBottom: 36 }}>
             Ella turns your expertise into LinkedIn posts that build credibility and attract the right opportunities. No ghostwriter. No templates. Just a smarter way to show the world how you think.
           </p>
-          <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+          <div className="ella-hero-ctas" style={{ display: "flex", gap: 14, alignItems: "center" }}>
             <button onClick={() => navigate("/signup")} style={{
               padding: "14px 28px", border: "none", borderRadius: 24,
               background: "#E8664A", color: "#fff", fontSize: 15, fontWeight: 700,
@@ -125,7 +152,7 @@ export default function Landing() {
 
         {/* Parrot illustration mosaic */}
         <div style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
-          <div style={{ position: "relative", width: 400, height: 400 }}>
+          <div className="ella-hero-illustration" style={{ position: "relative", width: 400, height: 400 }}>
             <div style={{
               position: "absolute", inset: 0,
               display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gridTemplateRows: "repeat(3, 1fr)",
@@ -173,12 +200,12 @@ export default function Landing() {
       </div>
 
       {/* ─── Pain Points ─── */}
-      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "60px 32px 80px" }}>
+      <div className="ella-section" style={{ maxWidth: 1120, margin: "0 auto", padding: "60px 32px 80px" }}>
         <h2 style={{
           fontFamily: "'DM Serif Display', serif", fontSize: 36, fontWeight: 400,
           textAlign: "center", color: "#E8664A", marginBottom: 48,
         }}>Sound familiar?</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20, maxWidth: 800, margin: "0 auto" }}>
+        <div className="ella-grid-2" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20, maxWidth: 800, margin: "0 auto" }}>
           {PAIN_POINTS.map((p, i) => (
             <div key={i} style={{
               background: "#EFEBE5", borderRadius: 16, padding: "28px 24px",
@@ -193,14 +220,14 @@ export default function Landing() {
       </div>
 
       {/* ─── LinkedIn isn't optional ─── */}
-      <div style={{ background: "#EFEBE5", padding: "80px 32px" }}>
+      <div className="ella-section" style={{ background: "#EFEBE5", padding: "80px 32px" }}>
         <div style={{ maxWidth: 1120, margin: "0 auto" }}>
           <div style={{ width: 40, height: 3, background: "#E8664A", borderRadius: 2, margin: "0 auto 24px" }} />
           <h2 style={{
             fontFamily: "'DM Serif Display', serif", fontSize: 36, fontWeight: 400,
             textAlign: "center", color: "#E8664A", marginBottom: 48,
           }}>LinkedIn isn't optional anymore</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+          <div className="ella-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
             {WHY_NOW.map((w, i) => (
               <div key={i} style={{
                 background: "#F7F3EE", borderRadius: 16, padding: "28px 24px",
@@ -214,7 +241,7 @@ export default function Landing() {
       </div>
 
       {/* ─── How It Works ─── */}
-      <div id="how" style={{ padding: "80px 32px" }}>
+      <div id="how" className="ella-section" style={{ padding: "80px 32px" }}>
         <div style={{ maxWidth: 1120, margin: "0 auto" }}>
           <p style={{
             fontSize: 12, fontWeight: 700, color: "#E8664A", textTransform: "uppercase",
@@ -225,7 +252,7 @@ export default function Landing() {
             textAlign: "center", color: "#2D2520", marginBottom: 56,
           }}>From blank page to posted in minutes</h2>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 28 }}>
+          <div className="ella-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 28 }}>
             {STEPS.map((step, i) => (
               <div key={i} style={{
                 background: "#EFEBE5", borderRadius: 16, padding: "28px 24px",
@@ -254,7 +281,7 @@ export default function Landing() {
       </div>
 
       {/* ─── Setup ─── */}
-      <div style={{ padding: "80px 32px" }}>
+      <div className="ella-section" style={{ padding: "80px 32px" }}>
         <div style={{ maxWidth: 1120, margin: "0 auto" }}>
           <p style={{
             fontSize: 12, fontWeight: 700, color: "#E8664A", textTransform: "uppercase",
@@ -265,7 +292,7 @@ export default function Landing() {
             textAlign: "center", color: "#2D2520", marginBottom: 56,
           }}>Set up in 2 minutes</h2>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 28 }}>
+          <div className="ella-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 28 }}>
             <div style={{
               background: "#EFEBE5", borderRadius: 16, padding: "28px 24px",
               borderTop: "3px solid #E8664A",
@@ -314,7 +341,7 @@ export default function Landing() {
       </div>
 
       {/* ─── Features ─── */}
-      <div id="features" style={{ background: "#EFEBE5", padding: "80px 32px" }}>
+      <div id="features" className="ella-section" style={{ background: "#EFEBE5", padding: "80px 32px" }}>
         <div style={{ maxWidth: 1120, margin: "0 auto" }}>
           <p style={{
             fontSize: 12, fontWeight: 700, color: "#E8664A", textTransform: "uppercase",
@@ -325,7 +352,7 @@ export default function Landing() {
             textAlign: "center", color: "#2D2520", marginBottom: 56,
           }}>Everything you need to post with confidence</h2>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+          <div className="ella-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
             {FEATURES.map((f, i) => (
               <div key={i} style={{
                 background: "#F7F3EE", borderRadius: 16, padding: "28px 24px",
@@ -348,7 +375,7 @@ export default function Landing() {
       </div>
 
       {/* ─── Pricing ─── */}
-      <div id="pricing" style={{ padding: "80px 32px" }}>
+      <div id="pricing" className="ella-section" style={{ padding: "80px 32px" }}>
         <div style={{ maxWidth: 800, margin: "0 auto", textAlign: "center" }}>
           <p style={{
             fontSize: 12, fontWeight: 700, color: "#E8664A", textTransform: "uppercase",
@@ -362,7 +389,7 @@ export default function Landing() {
             Everything you need to create LinkedIn posts that sound like you and build your professional credibility.
           </p>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 640, margin: "0 auto" }}>
+          <div className="ella-pricing-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 640, margin: "0 auto" }}>
             {/* Free tier */}
             <div style={{
               background: "#EFEBE5", borderRadius: 16, padding: "32px 28px", textAlign: "left",
@@ -405,8 +432,8 @@ export default function Landing() {
       </div>
 
       {/* ─── Final CTA ─── */}
-      <div style={{ padding: "80px 32px", textAlign: "center" }}>
-        <div style={{
+      <div className="ella-section" style={{ padding: "80px 32px", textAlign: "center" }}>
+        <div className="ella-final-cta" style={{
           maxWidth: 640, margin: "0 auto", background: "#EFEBE5",
           borderRadius: 24, padding: "56px 40px",
         }}>
