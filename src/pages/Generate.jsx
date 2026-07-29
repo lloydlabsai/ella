@@ -156,9 +156,15 @@ export default function Generate({ profile, mlResults, postCount = 0, recentPost
 
   const industry = profile?.industry || "";
   const tier = profile?.tier || "free";
-  const monthlyLimit = tier === "paid" ? 50 : 3;
+  // Generation caps. Self-hosted installs use their own Anthropic key, so both
+  // default to unlimited; set VITE_FREE_GENERATION_LIMIT / VITE_PAID_GENERATION_LIMIT
+  // (0 or unset = unlimited) to meter a hosted deployment.
+  const freeLimit = Number(import.meta.env.VITE_FREE_GENERATION_LIMIT) || 0;
+  const paidLimit = Number(import.meta.env.VITE_PAID_GENERATION_LIMIT) || 0;
+  const monthlyLimit = tier === "paid" ? paidLimit : freeLimit;
+  const unlimited = monthlyLimit <= 0;
   const [genCount, setGenCount] = useState(0);
-  const remaining = Math.max(0, monthlyLimit - genCount);
+  const remaining = unlimited ? Infinity : Math.max(0, monthlyLimit - genCount);
 
   // Fetch server-side generation count on mount
   useEffect(() => {
@@ -589,7 +595,9 @@ Do NOT add em dashes (—), emoji, single-sentence dramatic lines, or formal con
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 11, color: "#8B7E74", background: "#F7F3EE", padding: "4px 10px", borderRadius: 12 }}>{tierLabel}</div>
-          <div style={{ fontSize: 10, color: "#B5A698", marginTop: 4 }}>{remaining}/{monthlyLimit} generations this month</div>
+          <div style={{ fontSize: 10, color: "#B5A698", marginTop: 4 }}>
+            {unlimited ? `${genCount} generated this month` : `${remaining}/${monthlyLimit} generations this month`}
+          </div>
         </div>
       </div>
 

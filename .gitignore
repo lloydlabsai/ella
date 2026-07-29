@@ -11,6 +11,7 @@ pw-profile-*/
 !public/*.png
 !chrome-extension/icons/*.png
 supabase/.temp/
+.claude/settings.local.json
 scripts/probe-linkedin-selectors.mjs
 scripts/devtools-probe.js
 chrome-extension/probe.js

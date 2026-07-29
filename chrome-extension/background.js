@@ -6,8 +6,16 @@
    ═══════════════════════════════════════════════════════════ */
 
 // ─── CONFIG ───────────────────────────────────────────────
-const SUPABASE_URL = 'https://cpdppabgtlniunlcospd.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_-1ixcuHtEa9-wFTUCASa2g_TsRYCzou';
+// Edit chrome-extension/config.js to point at your Supabase project.
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+
+if (SUPABASE_URL.includes('YOUR_PROJECT') || SUPABASE_ANON_KEY.startsWith('YOUR_')) {
+  console.error(
+    '[Ella] Extension is not configured yet. Open chrome-extension/config.js ' +
+    'and set SUPABASE_URL and SUPABASE_ANON_KEY to your own Supabase project, ' +
+    'then reload the extension at chrome://extensions.'
+  );
+}
 
 // ─── SESSION MANAGEMENT ──────────────────────────────────
 

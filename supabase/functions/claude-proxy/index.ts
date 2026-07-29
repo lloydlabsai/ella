@@ -30,9 +30,12 @@ function getCorsHeaders(req: Request) {
   };
 }
 
-// Free tier: 3 generations/month. Paid: 50.
-const FREE_LIMIT = 3;
-const PAID_LIMIT = 50;
+// Monthly generation caps. Self-hosted installs bill their own Anthropic key,
+// so both default to unlimited. To meter a hosted deployment, set:
+//   supabase secrets set FREE_GENERATION_LIMIT=3 PAID_GENERATION_LIMIT=50
+// 0 or unset means unlimited.
+const FREE_LIMIT = Number(Deno.env.get("FREE_GENERATION_LIMIT")) || 0;
+const PAID_LIMIT = Number(Deno.env.get("PAID_GENERATION_LIMIT")) || 0;
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -73,7 +76,10 @@ serve(async (req) => {
     // The client sends x-generation-request: true header for draft generations
     const isGenerationRequest = req.headers.get("x-generation-request") === "true";
 
-    if (isGenerationRequest) {
+    // limit <= 0 means unlimited, so skip the tier lookup and metering query.
+    const meteredTiers = FREE_LIMIT > 0 || PAID_LIMIT > 0;
+
+    if (isGenerationRequest && meteredTiers) {
       // Get user's tier
       const { data: profile } = await supabase
         .from("profiles")
@@ -98,7 +104,7 @@ serve(async (req) => {
       if (countError) {
         console.error("Rate limit check failed:", countError.message);
         // Don't block on rate limit errors — fail open
-      } else if ((count || 0) >= limit) {
+      } else if (limit > 0 && (count || 0) >= limit) {
         return new Response(JSON.stringify({
           error: { message: `You've used all ${limit} generations this month. ${tier === "free" ? "Upgrade to Pro for more." : "Limit resets next month."}` }
         }), {

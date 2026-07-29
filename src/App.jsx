@@ -7,8 +7,8 @@ import Layout from "./components/Layout";
 import Landing from "./pages/Landing";
 import Generate from "./pages/Generate";
 import Score from "./pages/Score";
-// import Capture from "./pages/Capture";  // Disabled for free tier launch
-// import Database from "./pages/Database";  // Disabled for free tier launch
+import Capture from "./pages/Capture";
+import Database from "./pages/Database";
 import Analyze from "./pages/Analyze";
 import Settings from "./pages/Settings";
 import { Terms, Privacy } from "./pages/Legal";
@@ -56,10 +56,9 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Generate profile={auth.profile} mlResults={mlAnalysis.results} postCount={posts.count} recentPosts={posts.posts?.slice(0, 6)} refreshProfile={auth.refreshProfile} />} />
           <Route path="/score" element={<Score profile={auth.profile} mlResults={mlAnalysis.results} />} />
-          {/* Capture and Database routes disabled for free tier launch — redirect to home */}
-          <Route path="/capture" element={<Navigate to="/" replace />} />
-          <Route path="/database" element={<Navigate to="/" replace />} />
-          <Route path="/analyze" element={<Navigate to="/" replace />} /> {/* Disabled for free tier launch */}
+          <Route path="/capture" element={<Capture user={auth.user} profile={auth.profile} posts={posts} />} />
+          <Route path="/database" element={<Database posts={posts} />} />
+          <Route path="/analyze" element={<Analyze posts={posts} mlAnalysis={mlAnalysis} profile={auth.profile} />} />
           <Route path="/settings" element={<Settings profile={auth.profile} updateProfile={auth.updateProfile} />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />

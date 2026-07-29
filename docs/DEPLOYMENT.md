@@ -13,10 +13,14 @@
 
 1. Go to [supabase.com](https://supabase.com) → New Project
 2. Copy your **Project URL** and **anon/public key** from Settings → API
-3. Run the migration:
+3. Run the migrations:
    - Go to SQL Editor in the Supabase dashboard
-   - Paste the contents of `supabase/migrations/001_initial_schema.sql`
-   - Run it
+   - Run every file in `supabase/migrations/` in numerical order, from
+     `001_initial_schema.sql` through `008_add_generation_tracking.sql`
+   - Running only 001 will leave you missing columns the app expects
+
+   All tables have row-level security enabled with owner-scoped policies, so
+   each user can only read and write their own rows.
 
 ## Step 2: Deploy Edge Functions
 
