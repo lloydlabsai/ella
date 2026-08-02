@@ -340,14 +340,25 @@ export function runMLPipeline(posts) {
     const bottomScores = {};
     bottomTFIDF.forEach((doc) => Object.entries(doc).forEach(([t, s]) => (bottomScores[t] = (bottomScores[t] || 0) + s)));
 
+    // topPosts is the top 20% while bottomPosts is everything else, so the two
+    // groups have very different sizes. Comparing summed TF-IDF would make the
+    // larger group win every term, so compare the per-post mean instead.
+    const nTop = Math.max(topTokens.length, 1);
+    const nBottom = Math.max(bottomTokens.length, 1);
+
     result.differentialTerms = Object.keys(topScores)
-      .map((t) => ({
-        term: t,
-        topScore: topScores[t] || 0,
-        bottomScore: bottomScores[t] || 0,
-        diff: (topScores[t] || 0) - (bottomScores[t] || 0),
-      }))
-      .filter((t) => t.topScore > 0.3)
+      .map((t) => {
+        const topSum = topScores[t] || 0;
+        const bottomSum = bottomScores[t] || 0;
+        return {
+          term: t,
+          topScore: topSum / nTop,
+          bottomScore: bottomSum / nBottom,
+          diff: topSum / nTop - bottomSum / nBottom,
+          topSum,
+        };
+      })
+      .filter((t) => t.topSum > 0.3)
       .sort((a, b) => b.diff - a.diff)
       .slice(0, 30);
   }
@@ -362,13 +373,22 @@ export function runMLPipeline(posts) {
     bottomPosts.forEach((p) =>
       getNgrams(tokenize(p.post_text || ""), 2).forEach((g) => (bottomBigrams[g] = (bottomBigrams[g] || 0) + 1))
     );
+    // Same group-size problem as differentialTerms: compare per-post rates,
+    // not raw counts, or the larger bottom group inflates every denominator.
+    const nTopPosts = Math.max(topPosts.length, 1);
+    const nBottomPosts = Math.max(bottomPosts.length, 1);
+
     result.bigramDiff = Object.keys(topBigrams)
-      .map((g) => ({
-        bigram: g,
-        topCount: topBigrams[g],
-        bottomCount: bottomBigrams[g] || 0,
-        ratio: topBigrams[g] / Math.max(bottomBigrams[g] || 0.5, 0.5),
-      }))
+      .map((g) => {
+        const topRate = topBigrams[g] / nTopPosts;
+        const bottomRate = (bottomBigrams[g] || 0) / nBottomPosts;
+        return {
+          bigram: g,
+          topCount: topBigrams[g],
+          bottomCount: bottomBigrams[g] || 0,
+          ratio: topRate / Math.max(bottomRate, 0.5 / nBottomPosts),
+        };
+      })
       .filter((g) => g.topCount >= 2)
       .sort((a, b) => b.ratio - a.ratio)
       .slice(0, 20);

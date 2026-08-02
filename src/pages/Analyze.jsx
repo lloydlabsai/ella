@@ -336,11 +336,23 @@ export default function Analyze({ posts, mlAnalysis, profile }) {
           <div style={{ background: "#fff", border: "1px solid #EDE8E1", borderRadius: 14, padding: "20px 24px", boxShadow: "0 1px 3px rgba(45,37,32,0.04)" }}>
             <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: "#2D2520" }}>Winning Vocabulary</h3>
             <div style={{ display: "flex", flexWrap: "wrap" }}>
-              {r.differentialTerms.slice(0, 20).map((t) => (
-                <Pill key={t.term} color={t.diff > 2 ? "#E8664A" : t.diff > 1 ? "#6B9E7D" : "#7B9EC4"}>
-                  {t.term} <span style={{ opacity: 0.6 }}>+{t.diff.toFixed(1)}</span>
-                </Pill>
-              ))}
+              {(() => {
+                const terms = r.differentialTerms.slice(0, 20);
+                // diff is a per-post mean, so shade relative to the strongest
+                // term in this set rather than against fixed magnitudes.
+                const strongest = Math.max(...terms.map((t) => Math.abs(t.diff)), 1e-6);
+                return terms.map((t) => (
+                  <Pill
+                    key={t.term}
+                    color={t.diff <= 0 ? "#7B9EC4" : t.diff > strongest * 0.6 ? "#E8664A" : "#6B9E7D"}
+                  >
+                    {t.term}{" "}
+                    <span style={{ opacity: 0.6 }}>
+                      {t.diff >= 0 ? "+" : ""}{t.diff.toFixed(2)}
+                    </span>
+                  </Pill>
+                ));
+              })()}
             </div>
           </div>
           <div style={{ background: "#fff", border: "1px solid #EDE8E1", borderRadius: 14, padding: "20px 24px", boxShadow: "0 1px 3px rgba(45,37,32,0.04)" }}>

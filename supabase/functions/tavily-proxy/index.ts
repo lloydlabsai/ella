@@ -8,17 +8,30 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const TAVILY_URL = "https://api.tavily.com/search";
 const TAVILY_KEY = Deno.env.get("TAVILY_API_KEY");
 
-const ALLOWED_ORIGINS = [
+// Origins allowed to call this function. Self-hosters should set their own:
+//   supabase secrets set ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+// When ALLOWED_ORIGINS is set it replaces these defaults entirely. Any localhost
+// port is always allowed, so `npm run dev` works whatever port Vite picks.
+const CONFIGURED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const DEFAULT_ORIGINS = [
   "https://getella.io",
   "https://www.getella.io",
   "https://ella-beryl.vercel.app",
-  "http://localhost:3000",
-  "http://localhost:3001",
 ];
+
+const ALLOWED_ORIGINS = CONFIGURED_ORIGINS.length ? CONFIGURED_ORIGINS : DEFAULT_ORIGINS;
+
+const isLocalDev = (origin: string) =>
+  /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
-  const allowOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allowOrigin =
+    ALLOWED_ORIGINS.includes(origin) || isLocalDev(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
